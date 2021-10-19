@@ -1,0 +1,82 @@
+# Import libraries 
+library(shiny)
+library(shinythemes)
+library(RCurl)
+
+# Define UI for alignment application 
+ui <- fluidPage(theme=shinytheme('yeti'),
+
+    # Application title
+    titlePanel("Pairwise alignment with dynamic programming"),
+    headerPanel('Pairwise alignment'),
+
+    # Input data elements: Protein sequences to compare, substitution matrix and gap penalty 
+    sidebarLayout(
+        sidebarPanel(
+            HTML('<h3>Input parameters</h3>'),
+            textInput("seq1", "Sequence 1:", ""),
+            textInput("seq2", "Sequence 2:", ""),
+            selectInput("sub_mtx_name", "Substitution matrix (scoring)",
+                        choices = list("BLOSUM45"='BLOSUM45', 'BLOSUM62'='BLOSUM62', 'BLOSUM80'='BLOSUM80'),
+                        selected = 'BLOSUM62'),
+            sliderInput("gap_penalty",
+                        "Gap penalty:",
+                        min = -10,
+                        max = 0,
+                        value = -1),
+            actionButton('submitbutton', 'Submit', class='btn btn-primary')
+        ),
+
+        # Show a pair matrix of the global alignment
+        mainPanel(
+            tags$label(h3('Pair matrix of the global alignemnt \n')),
+            uiOutput('mtx'),
+        )
+    )
+)
+
+# Define server logic required to perform the alingment (dynamic programming) 
+server <- function(input, output) {
+    
+    # Consider the set input when something happens (submission button)
+    numericInput <- reactive({
+        seq1 = unlist(strsplit(input$seq1, '')); seq2 = unlist(strsplit(input$seq2, ''))
+        seq1 = c('NULL', seq1); seq2 = c('NULL', seq2)
+        gap_penalty = input$gap_penalty
+        sub_mtx = read.table(text=getURL(paste0('https://raw.githubusercontent.com/Gero1999/data/main/sub_matrices/', input$sub_mtx_name)), header=TRUE)
+        
+        mtx = matrix(0, nrow=length(seq1), ncol=length(seq2))
+        rownames(mtx)=seq1; colnames(mtx)=seq2
+        
+        for (row in 2:nrow(mtx)){
+            mtx[row,1] = mtx[row-1,1] + gap_penalty}
+        for (col in 2:ncol(mtx)){
+            mtx[1,col] = mtx[1,col-1] + gap_penalty}
+        
+        for (row in 2:nrow(mtx)){
+            print(paste0('Row: ', row))
+            for (col in 2:ncol(mtx)){
+                match_score = sub_mtx[rownames(mtx)[row],colnames(mtx)[col]]
+                print(paste0('Col: ', col, ' Row: ', row, rownames(mtx)[row], '-', colnames(mtx)[col]))
+                possible_paths = c(mtx[row-1,col-1]+match_score,
+                                   mtx[row-1,col]+gap_penalty,
+                                   mtx[row,col-1]+gap_penalty)
+                print(mtx[row,col])
+                mtx[row,col] = max(possible_paths)
+                print(mtx[row,col])
+                }
+        }
+        Output <- mtx
+        print(Output)
+    })
+    
+    # If the submission button is pressed returns the pair matrix (output) including row names.
+    output$mtx <- renderTable({
+        if (input$submitbutton>0){
+            isolate(numericInput())
+            }
+        }, rownames=TRUE)
+}
+
+# Run the application 
+shinyApp(ui = ui, server = server)
