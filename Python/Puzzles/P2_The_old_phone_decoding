@@ -1,0 +1,66 @@
+## Puzzle statement
+#  Imagine we have an old phone as the next one:
+
+ #                _________________
+ #               |  1  |  2  |  3  |
+ #               |     | abc | def |
+ #               | --- | --- | --- |
+ #               |  4  |  5  |  6  |
+ #               | ghi | jkl | mno |
+ #               | --- | --- | --- |
+ #               |  7  |  8  |  9  |
+ #               | pqrs| tuv | wxyz|
+ #               | --- | --- | --- |
+ #               |     |  0  |     |
+ #                __________________
+  
+ #  Each digit is capable of producing a different group of letters. 
+ #  With that in mind imagine we have a list of words and a list of numbers:
+ 
+ nr_list = [43556, 695]
+ word_list = ["hello", "bowl", "bye"]
+ 
+ #  You have to create  a function capable of saying which words (or even "subwords" inside words) are capable those numbers to produce
+ #  In the example given, there would be the next matches  43556--> "hello"    695-->(b)'owl' (as long as owl is inside the word 'bowl'
+ #  In other words the output list might be the next one:
+ 
+ output_list = ["hello", "owl"]
+ 
+ 
+ 
+ 
+ 
+ ## My solution
+ 
+   # We specify the code that we want to decode:
+ code_ dicc = {1:[], 2:["a","b","c"], 3:["d","e","f"], 4:["g","h","i"], 5:["j","k","l"], 6:["m","n","o"],
+               7:['p','q','r','s'], 8:["t","u","v"], 9:["w","x","y","z"], 0:[]}
+
+ 
+   # Create the function for decoding and the lookups (using regular expressions)
+ 
+ def discover_coding_words(nr_list, word_list, code_dicc):
+ 
+ '''This function takes a list of int values (nr_list) and a str list (word_list) that are related through a 
+    specific code in a dictionary, could be anyone specified(code_dicc). It would decode all the numbers and
+    find all those decoded words in the words or the sub_words inside the word_list. '''
+    
+    import re; word_matches = []
+    for nr in nr_list:
+        regex = '.*'
+        for digit in str(nr):
+            if len(code_dicc[int(digit)])==0: continue    # Ensure that any empty element could affect the look-up
+            regex_digit = ''.join(code_dicc[int(digit)])
+            regex = regex + '[' + regex_digit + ']'       # By iterations create the regex element for the look-up
+        word_str = '\n'.join(word_list)
+        regex = regex + '.*'
+        word_matches.append(re.findall(regex, word_str))  # Find all the potential results for this number and store them
+    return(word_matches)
+   
+   # Check if the output is correct
+   discover_coding_words(nr_list, word_list
+ 
+   
+   # As you can see this function has a complexity O(l), being "l" the total number of digits inside the function. 
+ 
+ 
