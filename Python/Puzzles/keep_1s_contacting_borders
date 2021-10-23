@@ -1,0 +1,54 @@
+## Puzzle statemnet:
+# Imagine you have a binary matrix as input:
+
+import numpy as np
+  input = np.array([[1,1,0,0,0],
+                    [0,0,0,1,0],
+                    [0,1,0,1,0],
+                    [0,0,0,1,0]
+                    [0,0,1,0,0])
+
+# Create a function that substitutes for 0s all the 1s that are independent to the boards of the matrix 
+# (also called islands). In other words, the expected output for the previous example would be:
+  
+  output = np.array([[1,1,0,0,0],
+                     [0,0,0,1,0],
+                     [0,0,0,1,0],
+                     [0,0,0,1,0]
+                     [0,0,1,0,0])
+                    
+                    
+## My solution (code):
+
+def discard_1s_contacting_borders(matrix):
+  # Create a list with the positions (tuples) of all the 1s in the matrix.
+  list_indexes = list(zip(np.where(matrix==1)[0], np.where(matrix==1)[1]))
+
+  # We eliminate all the 1s with no consideration. Our objective is to find those 1s that are required to be restored.
+  matrix[np.where(matrix==1)]=0
+
+  # Differentiate the "edges" (all the 1s that are located in the external board/frame of the matrix) and the not-edges.
+  edges = []; not_edges = []
+  for indexes in list_indexes:
+      if indexes[0]==0 or indexes[0]==np.shape(matrix)[0] or indexes[1]== 0 or indexes[1]== np.shape(matrix)[1]:
+          edges.append(indexes)
+      else:
+          not_edges.append(indexes)
+
+  # Find all those elements that are connected with the 1's of the edges. The loop is retroactive when it finds one, so it continues looking.
+  for edge in edges:
+
+      # The loop continues looking for edge-dependent elements not stored yet
+      if (edge[0]+1, edge[1]) in not_edges and (edge[0]+1, edge[1]) not in edges: edges.append(not_edges[not_edges.index((edge[0]+1, edge[1]))])
+      if (edge[0]+1, edge[1]+1) in not_edges and (edge[0], edge[1]+1) not in edges: edges.append(not_edges[not_edges.index((edge[0]+1, edge[1]+1))])
+      if (edge[0], edge[1]+1) in not_edges and (edge[0], edge[1]+1) not in edges: edges.append(not_edges[not_edges.index((edge[0], edge[1]+1))])
+      if (edge[0]-1, edge[1]) in not_edges and (edge[0]-1, edge[1]) not in edges: edges.append(not_edges[not_edges.index((edge[0]-1, edge[1]))])
+      if (edge[0]-1, edge[1]-1) in not_edges and (edge[0]-1, edge[1]-1) not in edges: edges.append(not_edges[not_edges.index((edge[0]-1, edge[1]-1))])
+      if (edge[0], edge[1]-1) in not_edges and (edge[0], edge[1]-1) not in edges: edges.append(not_edges[not_edges.index((edge[0], edge[1]-1))])
+
+      # All the edge and dependent-edge elements stored would be restored as 1, one by one in each iteration
+      matrix[edge] = 1
+
+  return(matrix)
+
+discard_1s_contacting_borders(matrix)
