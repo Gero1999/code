@@ -1,9 +1,9 @@
-# Import libraries 
+# Import libraries
 library(shiny)
 library(shinythemes)
 library(RCurl)
 
-# Define UI for alignment application 
+# Define UI for application that draws a histogram
 ui <- fluidPage(theme=shinytheme('yeti'),
 
     # Application title
@@ -27,18 +27,20 @@ ui <- fluidPage(theme=shinytheme('yeti'),
             actionButton('submitbutton', 'Submit', class='btn btn-primary')
         ),
 
-        # Show a pair matrix of the global alignment
+        # Show a pair matrix of the global alignment and the aligned sequences
         mainPanel(
             tags$label(h3('Pair matrix of the global alignemnt \n')),
             uiOutput('mtx'),
+            tags$label(h3('Alignment')),
+            uiOutput('alig_seq1'),
+            uiOutput("alig_seq2"),
         )
     )
 )
 
-# Define server logic required to perform the alingment (dynamic programming) 
+# Define server logic required to perform the alignment (dynamic programming)
 server <- function(input, output) {
-    
-    # Consider the set input when something happens (submission button)
+
     numericInput <- reactive({
         seq1 = unlist(strsplit(input$seq1, '')); seq2 = unlist(strsplit(input$seq2, ''))
         seq1 = c('NULL', seq1); seq2 = c('NULL', seq2)
@@ -61,22 +63,56 @@ server <- function(input, output) {
                 possible_paths = c(mtx[row-1,col-1]+match_score,
                                    mtx[row-1,col]+gap_penalty,
                                    mtx[row,col-1]+gap_penalty)
-                print(mtx[row,col])
                 mtx[row,col] = max(possible_paths)
-                print(mtx[row,col])
-                }
+            }
         }
-        Output <- mtx
-        print(Output)
+        # Do the traceback starting in the rigth-bottom cell (global alignment)
+        row = length(seq1); col = length(seq2)
+        alig_seq1 = ''; alig_seq2 = ''
+        
+        # It iterates over the different potential cells, displaying one global optimum alignment
+        while (row!=1 || col!=1){
+            cell = mtx[row,col]
+            match_score = sub_mtx[rownames(mtx)[row],colnames(mtx)[col]]
+            
+            if (cell-match_score==mtx[row-1,col-1] && !is.null(match_score)){
+                alig_seq1 = paste0(rownames(mtx)[row], alig_seq1)
+                alig_seq2 = paste0(rownames(mtx)[row], alig_seq2) 
+                row = row-1; col = col-1
+            } else if (cell-gap_penalty==mtx[row-1,col]){
+                alig_seq1 = paste0(rownames(mtx)[row], alig_seq1)
+                alig_seq2 = paste0('_', alig_seq2)
+                row = row-1
+            } else if (cell-gap_penalty==mtx[row,col-1]){
+                alig_seq1 = paste0('_', alig_seq1)
+                alig_seq2 = paste0(rownames(mtx)[row], alig_seq2)
+                col = col-1
+            }
+        }
+        
+        # Object with all the outputs planned to be returned
+        list(mtx, alig_seq1, alig_seq2)
     })
     
-    # If the submission button is pressed returns the pair matrix (output) including row names.
+    # Define all the outputs specified previously in the UI and built during the server function
     output$mtx <- renderTable({
         if (input$submitbutton>0){
-            isolate(numericInput())
+            isolate(numericInput()[[1]])
             }
         }, rownames=TRUE)
+    output$alig_seq1 <- renderText({
+        if (input$submitbutton>0){
+            isolate(numericInput()[[2]])
+        }
+        })
+    output$alig_seq2 <- renderText({
+        if (input$submitbutton>0){
+            isolate(numericInput()[[3]])
+        }
+    })
+
 }
 
 # Run the application 
 shinyApp(ui = ui, server = server)
+
