@@ -1,11 +1,10 @@
-# Packages required
+#Packages required
 import streamlit as st
 from PIL import Image
 import pandas as pd
 import numpy as np
-from Bio.SubsMat import MatrixInfo
 from collections import Counter
-
+from Bio.Align import substitution_matrices
 st.markdown("<h1 style='text-align: center; color: white;'>Prot-Profiler</h1>", unsafe_allow_html=True)
 st.markdown("""<h5 style='text-align: center; color: white;'>A streamlit app to generate Hidden Markov Profiles from a list of proteins,
 as well as the correspondent progressive MSA used (Multiple Sequence Alignment). The output are the transition and emission matrices (
@@ -20,23 +19,22 @@ As an example to test, we have used some sequences of the TAF protein family''')
 
 with st.form(key='my_form'):
     seqs = st.text_input(label='► List of protein sequences separated by commas (blank spaces will be ignored)',
-                         value='''FVEIPRESVRLMAESTGLELSDEVAALLAEDVCYRLREATQNSSQFMKHTKRRKLTVEDFNRALR,MSIVPKETIEVIGQSVGIANLPADVSAALAPDVEYRLREIMQEAIKCMRHAKRTVLTADDVDSALSLR,
-                         MSIVPKETVEVIAQSIGITNLLPEAALMLAPDVEYRVREIMQEAIKCMRHSKRTTLTASDVDGALNLR,LTVWNIESIKDVAEMLGIGNLADEPAAAIAMDLEYRIHQVVQEATKFMVHSKRTVLTSADISSALR,
+                         value='''FVEIPRESVRLMAESTGLELSDEVAALLAEDVCYRLREATQNSSQFMKHTKRRKLTVEDFNRALR\nMSIVPKETIEVIGQSVGIANLPADVSAALAPDVEYRLREIMQEAIKCMRHAKRTVLTADDVDSALSLR
+                         MSIVPKETVEVIAQSIGITNLLPEAALMLAPDVEYRVREIMQEAIKCMRHSKRTTLTASDVDGALNLR\nLTVWNIESIKDVAEMLGIGNLADEPAAAIAMDLEYRIHQVVQEATKFMVHSKRTVLTSADISSALR
                          TIWSPQDTVKDVAESLGLENINDDVLKALAMDVEYRILEIIEQAVKFKRHSKRDVLTTDDVSKALR''')
 
-    blosum_index = st.select_slider('► BLOSUM substitution matrix for the MSA', options=['30', '45', '60', '80'])
+    sub_mtx_name = st.selectbox('► Substitution matrix for the MSA', options=substitution_matrices.load(), index=3)
     PC = st.select_slider('► Pseudocount constant to elude unobserved cases to be impossible', options=[0, 1, 2, 3])
     submit_button = st.form_submit_button(label='Submit')
 
 if submit_button:
-    blosum = {'30':MatrixInfo.blosum30, '45':MatrixInfo.blosum45, '60':MatrixInfo.blosum60, '80':MatrixInfo.blosum80}[blosum_index]
+    sub_mtx = substitution_matrices.load(sub_mtx_name)
 
     # Elude potential mistakes and separate the sequences in a list using the commas
-    seqs = seqs.replace('\n', '').replace(' ', '').upper()
-    seqs = seqs.split(',')
+    seqs = seqs.replace(' ', '').upper().splitlines()
 
     # The emission letters of our HMM are protein aminoacids. Elude unknown aminoacids (X) to be considered as potential emissions.
-    alphabet = list(set([pair_aa_letters[0] for pair_aa_letters in blosum.keys()]))
+    alphabet = list(sub_mtx.alphabet)
     if 'X' in alphabet:
         alphabet.remove('X')
 
@@ -50,19 +48,17 @@ if submit_button:
         # Declare the sequences and the scoring system
         seq1= list(' '+str(seq_obj1))
         seq2= list(' '+str(seq_obj2))
-        import pandas as pd
-        from Bio.SubsMat import MatrixInfo
-        blosum = MatrixInfo.blosum45
 
         # Fill the scoring matrix
         mtx = pd.DataFrame(0,columns=seq1, index=seq2)
         for i in range(1,len(seq2)):
             for j in range(1, len(seq1)):
+                print('Scoring', i, j)
                 # Score
-                if (seq2[i], seq1[j]) in blosum.keys():
-                    score = blosum[(seq2[i], seq1[j])]
-                if (seq1[j], seq2[i]) in blosum.keys():
-                    score = blosum[(seq1[j], seq2[i])]
+                if (seq2[i], seq1[j]) in sub_mtx.keys():
+                    score = sub_mtx[(seq2[i], seq1[j])]
+                if (seq1[j], seq2[i]) in sub_mtx.keys():
+                    score = sub_mtx[(seq1[j], seq2[i])]
                 possible_scores = [mtx.values[i-1,j],
                                     mtx.values[i,j-1],
                                     mtx.values[i-1,j-1]+score]
@@ -72,11 +68,12 @@ if submit_button:
         i=len(seq2)-1; j=len(seq1)-1
         s1 = str(seq_obj1); s2 = str(seq_obj2)
         while i>0 or j>0:
+            print('TB', i, j)
             # Score
-            if (seq2[i], seq1[j]) in blosum.keys():
-                score = blosum[(seq2[i], seq1[j])]
-            if ((seq1[j], seq2[i])) in blosum.keys():
-                score = blosum[(seq1[j], seq2[i])]
+            if (seq2[i], seq1[j]) in sub_mtx.keys():
+                score = sub_mtx[(seq2[i], seq1[j])]
+            if ((seq1[j], seq2[i])) in sub_mtx.keys():
+                score = sub_mtx[(seq1[j], seq2[i])]
 
             if mtx.values[i,j] == mtx.values[i-1,j-1]+score:
                 i=i-1; j=j-1
