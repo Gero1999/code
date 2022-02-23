@@ -142,7 +142,7 @@ st.markdown('''
 ## Bioinformatic Tools & Pipelines
 ---
 ''')
-st.markdown('''► [HMM-profiler](https://github.com/Gero1999/code/tree/main/streamlit/prot-profiler-app). Generates the 
+st.markdown('''► [HMM-profiler](https://share.streamlit.io/gero1999/code/main/streamlit/prot-profiler-app/app.py). Generates the 
             multiple sequence alignment (MSA) of a list of input sequences, as well as the transition and emission matrices 
             defining its Hidden Markov Model profile capturing aminoacid conservation and protein family features''')
 
@@ -152,7 +152,7 @@ st.markdown('''► [PairAlign](https://gero1999.shinyapps.io/Pair-Aligner/). Glo
 st.markdown('''► [Texas-Cheater](https://gero1999.shinyapps.io/Texas-Cheater/). A Poker simulator that given the user cards and the number of players computes a customizable 
 number of games to predict the chances to possess the winning hand.''')
 
-st.markdown('''► [This resume](https://gero1999.shinyapps.io/Texas-Cheater/). This web page was also designed using Streamlit''')
+st.markdown('''► [This resume](https://share.streamlit.io/gero1999/code/main/streamlit/resume/resume.py). This web page was also designed using Streamlit''')
 
 
 #####################
