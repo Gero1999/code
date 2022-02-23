@@ -1,8 +1,9 @@
 import streamlit as st
 from PIL import Image
 
-with open("https://raw.githubusercontent.com/Gero1999/code/main/streamlit/resume/style.css") as f:
+with open("style.css") as f:
     st.markdown('<style>{}</style>'.format(f.read()), unsafe_allow_html=True)
+
 
 # Title/Header
 st.write('''
@@ -10,7 +11,7 @@ st.write('''
 #### *Resume & Qualifications as a bioinformatician* 
 ''')
 
-image = Image.open('33029725205_1c84e5e5a1_c.jpg')
+image = Image.open('https://github.com/Gero1999/code/blob/main/streamlit/resume/profile.jpg')
 st.image(image, width=700)
 
 st.markdown('## Summary', unsafe_allow_html=True)
