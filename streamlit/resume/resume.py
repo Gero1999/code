@@ -106,7 +106,7 @@ st.markdown(''' ''')
 txt('**BSc Biochemistry**, *Complutense University of Madrid*, Spain', '1998-2002')
 st.markdown('''
 - GPA: `10` in 7-point grading scale 
-- Thesis: "Metaanalysis of RNA-seq and microarray data of cytarabine's action"
+- Thesis: "Meta-analysis of RNA-seq and microarray raw data of cytarabine's action"
 ''')
 
 #####################
@@ -125,13 +125,13 @@ st.markdown('''
 ''')
 
 
-txt('**Content Creator**, Youtube Channel: []()','2022-Present')
+txt('**Content Creator**, Youtube Channel: []()', '2022-Present')
 st.markdown('''
 - Biotechnology and bioinformatic fields explained from 0
 - Science communication in english to a non-specialized audience
 ''')
 
-txt('**Participation in short-films and theatre**','2022-Present')
+txt('**Participation in short-films and development of theatre plays**','2022-Present')
 st.markdown('''
 - Improvisation and presentation skills
 - Organization and teamwork experience
@@ -145,11 +145,16 @@ st.markdown('''
 ''')
 st.markdown('''► [HMM-profiler](https://github.com/Gero1999/code/tree/main/streamlit/prot-profiler-app). Generates the 
             multiple sequence alignment (MSA) of a list of input sequences, as well as the transition and emission matrices 
-            defining its Hidden Markov Model profile capturing their common characteristics in the development''')
+            defining its Hidden Markov Model profile capturing aminoacid conservation and protein family features''')
 
-st.markdown('''► [PairAlign](https://github.com/Gero1999/code/blob/main/shinyR/pairwise_alignment_DP). Global pair-sequence 
-            aligner tool implementing the Needleman algorithm (Dynamic programming) by using the scoring system and the linear 
-            gap penalty specified by the user for the 2 DNA sequences given as input''')
+st.markdown('''► [PairAlign](https://gero1999.shinyapps.io/Pair-Aligner/). Global pair-sequence aligner tool implementing
+ the Needleman algorithm (Dynamic programming) by using the scoring system and the linear gap penalty specified by the user for the 2 DNA sequences given as input''')
+
+st.markdown('''► [Texas-Cheater](https://gero1999.shinyapps.io/Texas-Cheater/). A Poker simulator that given the user cards and the number of players computes a customizable 
+number of games to predict the chances to possess the winning hand.''')
+
+st.markdown('''► [This resume](https://gero1999.shinyapps.io/Texas-Cheater/). This web page was also designed using Streamlit''')
+
 
 #####################
 st.markdown(''' '''); st.markdown(''' ''')
