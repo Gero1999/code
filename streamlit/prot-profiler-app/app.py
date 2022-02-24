@@ -18,7 +18,7 @@ Introduce all your input protein sequences and select the scoring system criteri
 As an example to test, we have used some sequences of the TAF protein family''')
 
 with st.form(key='my_form'):
-    seqs = st.text_area(label='► List of protein sequences separated by commas (blank spaces will be ignored)',
+    seqs = st.text_area(label='► List of protein sequences separated by new lines',
                          value='''FVEIPRESVRLMAESTGLELSDEVAALLAEDVCYRLREATQNSSQFMKHTKRRKLTVEDFNRALR\nMSIVPKETIEVIGQSVGIANLPADVSAALAPDVEYRLREIMQEAIKCMRHAKRTVLTADDVDSALSLR
                          MSIVPKETVEVIAQSIGITNLLPEAALMLAPDVEYRVREIMQEAIKCMRHSKRTTLTASDVDGALNLR\nLTVWNIESIKDVAEMLGIGNLADEPAAAIAMDLEYRIHQVVQEATKFMVHSKRTVLTSADISSALR
                          TIWSPQDTVKDVAESLGLENINDDVLKALAMDVEYRILEIIEQAVKFKRHSKRDVLTTDDVSKALR''')
