@@ -10,7 +10,7 @@ st.write('''
 #### *Resume & Qualifications as a bioinformatician* 
 ''')
 
-image = Image.open('streamlit/resume/Diapositiva4.PNG')
+image = Image.open('streamlit/resume/Imagen2.png')
 st.image(image, width=700)
 
 st.markdown('## Summary', unsafe_allow_html=True)
