@@ -99,7 +99,7 @@ st.markdown('''
 txt('**MSc Bioinformatics**, *Copenhagen University*, Denmark', '2002-2006')
 st.markdown('''
 - GPA until now: `11` in 7-point grading scale 
-- Research thesis entitled `Still in process`.
+- Relevant courses taken: Population genetics, Data Science, Statistics, Structural Bioinformatics
 ''')
 st.markdown(''' ''')
 txt('**BSc Biochemistry**, *Complutense University of Madrid*, Spain', '1998-2002')
@@ -144,7 +144,7 @@ st.markdown('''
 ''')
 st.markdown('''► [HMM-profiler](https://share.streamlit.io/gero1999/code/main/streamlit/prot-profiler-app/app.py). Generates the 
             multiple sequence alignment (MSA) of a list of input sequences, as well as the transition and emission matrices 
-            defining its Hidden Markov Model profile capturing aminoacid conservation and protein family features''')
+            defining its Hidden Markov Model profile capturing amino acid conservation and protein family features''')
 
 st.markdown('''► [PairAlign](https://gero1999.shinyapps.io/Pair-Aligner/). Global pair-sequence aligner tool implementing
  the Needleman algorithm (Dynamic programming) by using the scoring system and the linear gap penalty specified by the user for the 2 DNA sequences given as input''')
