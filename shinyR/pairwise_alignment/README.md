@@ -10,6 +10,7 @@
 
   <p align="center">
     See how your sequences align! 
+    <br/>
     [Check it online](https://gero1999.shinyapps.io/Pair-Aligner/)
   </p>
 </div>
