@@ -6,7 +6,7 @@
     <img src="dsDNA_linear.png" alt="Logo" width="80" height="80">
   </a>
 
-  <h3 align="center">Best-README-Template</h3>
+  <h3 align="center">Pair-Aligner</h3>
   <a href="https://gero1999.shinyapps.io/Pair-Aligner/"><strong>Check the app »</strong></a>
   <p align="center">
     See how your sequences align! 
