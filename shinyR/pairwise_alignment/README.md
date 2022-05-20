@@ -7,17 +7,11 @@
   </a>
 
   <h3 align="center">Best-README-Template</h3>
-
+  <a href="https://gero1999.shinyapps.io/Pair-Aligner/"><strong>Check the app »</strong></a>
   <p align="center">
     See how your sequences align! 
-    <br/>
-    [Check it online](https://gero1999.shinyapps.io/Pair-Aligner/)
   </p>
 </div>
-
-
-
-
 
 
 
