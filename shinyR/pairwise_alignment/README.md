@@ -9,7 +9,8 @@
   <h3 align="center">Best-README-Template</h3>
 
   <p align="center">
-    See how your sequences align! [Check it online](https://gero1999.shinyapps.io/Pair-Aligner/)
+    See how your sequences align! 
+    [Check it online](https://gero1999.shinyapps.io/Pair-Aligner/)
   </p>
 </div>
 
