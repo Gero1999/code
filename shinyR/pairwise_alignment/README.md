@@ -9,7 +9,7 @@
   <h3 align="center">Best-README-Template</h3>
 
   <p align="center">
-    See how your sequences align!
+    See how your sequences align! [Check it online](https://gero1999.shinyapps.io/Pair-Aligner/)
   </p>
 </div>
 
@@ -23,7 +23,7 @@
 ## About The Project
 
 
-What are the uses of this app?
+What are the uses of this app? 
 * Compare the homology of two sequences graphically 
 * Obtain an score to assess an alignment
 * Use dynamic programming (Watermann algorithm) to deduce the optimal solution
