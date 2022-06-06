@@ -99,15 +99,15 @@ st.markdown('''
 ---
 ''')
 
-txt('**MSc Bioinformatics**, *Copenhagen University*, Denmark', '2002-2006')
+txt('**MSc Bioinformatics**, *Copenhagen University*, Denmark', '2021-Present')
 st.markdown('''
-- GPA until now: `11` in 7-point grading scale 
+- Grade until now: `11` in 7-point grading scale 
 - Relevant courses taken: Population genetics, Data Science, Statistics, Structural Bioinformatics
 ''')
 st.markdown(''' ''')
-txt('**BSc Biochemistry**, *Complutense University of Madrid*, Spain', '1998-2002')
+txt('**BSc Biochemistry**, *Complutense University of Madrid*, Spain', '2017-2021')
 st.markdown('''
-- GPA: `10` in 7-point grading scale 
+- Grade average: `10` in 7-point grading scale 
 - Thesis: "Meta-analysis of RNA-seq and microarray raw data of cytarabine's action"
 ''')
 
@@ -127,7 +127,7 @@ st.markdown('''
 ''')
 
 
-txt('**Content Creator**, Youtube Channel: []()', '2022-Present')
+txt('**Content Creator**, Youtube Channel: [Bio100](https://www.youtube.com/channel/UCfF_6XhQW_lJDpISf1BX68A)', '2022-Present')
 st.markdown('''
 - Biotechnology and bioinformatic fields explained from 0
 - Science communication in english to a non-specialized audience
@@ -154,6 +154,10 @@ st.markdown('''► [PairAlign](https://gero1999.shinyapps.io/Pair-Aligner/). Glo
 
 st.markdown('''► [Texas-Cheater](https://gero1999.shinyapps.io/Texas-Cheater/). A Poker simulator that given the user cards and the number of players computes a customizable 
 number of games to predict the chances to possess the winning hand.''')
+
+st.markdown('''► [Statistics from scratch](https://rpubs.com/Gero1999/872369). An initial statistics guide to those who want to learn the fundamentals of the subject using only basic R''')
+
+st.markdown('''► [Maths behind population genetics](https://rpubs.com/Gero1999/872380). Many simulation examples in order to familiarize those who are interested in population genetics models''')
 
 st.markdown('''► [This resume](https://share.streamlit.io/gero1999/code/main/streamlit/resume/resume.py). This web page was also designed using Streamlit''')
 
