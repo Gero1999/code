@@ -33,11 +33,10 @@ The utility of this project remains in:
 
 The files you can find in this repository are:
 
-1) **HMM_profiler.** Given a set of sequences (presumably from the same protein family) it constructs a HMM model of two matrices, one revealing state transitions (being the states: Deletion, Insertion, Match) or emissions (for the 20 aminoacids). <br/>
+1) **HMM_profiler.** Given a set of sequences (presumably from the same protein family) it constructs a HMM model of two matrices, one revealing state transitions (being the states: Deletion, Insertion, Match) or emissions (for the 20 aminoacids). <br/> <br/>
 2) **HMM_decoder_and_evaluator.** Given a HMM profile involving two matrices (state transition and residue emission) the function can generate the most probable sequence, or alternatively given one sequence calculate its probability to be part of the considered family.
 
-
-
+<br/>
 
 
 ### Built With
