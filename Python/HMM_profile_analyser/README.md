@@ -32,7 +32,8 @@ The utility of this project remains in:
 * Evaluate new potential proteins belonging to the identified family
 
 The files you can find in this repository are:
-1) Given a set of sequences (presumably from the same protein family) it constructs a HMM model of two matrices, one revealing state transitions (being the states: Deletion, Insertion, Match) or emissions (for the 20 aminoacids).
+
+1) Given a set of sequences (presumably from the same protein family) it constructs a HMM model of two matrices, one revealing state transitions (being the states: Deletion, Insertion, Match) or emissions (for the 20 aminoacids). <br/>
 2) HMM_decoder_and_evaluator. Given a HMM profile involving two matrices (state transition and residue emission) the function can generate the most probable sequence, or alternatively given one sequence calculate its probability to be part of the considered family.
 
 
@@ -50,6 +51,12 @@ The files you can find in this repository are:
 
 
 
+<!-- USAGE EXAMPLES -->
+## Usage
+
+You can actually see a practical example with short TAF sequences in the next [streamlit app](https://gero1999-code-streamlitprot-profiler-appapp-uorzny.streamlitapp.com/)
+
+<p align="right">(<a href="#top">back to top</a>)</p>
 
 
 <!-- USAGE EXAMPLES -->
