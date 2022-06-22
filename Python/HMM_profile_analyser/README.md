@@ -41,8 +41,6 @@ The files you can find in this repository are:
 
 ### Built With
 
-This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
-
 * [Pandas]()
 * [Numpy]()
 * [Collections]()
@@ -57,9 +55,7 @@ This section should list any major frameworks/libraries used to bootstrap your p
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
-
-_For more examples, please refer to the [Documentation](https://example.com)_
+You can actually see a practical example with short TAF sequences in the next [streamlit app](https://gero1999-code-streamlitprot-profiler-appapp-uorzny.streamlitapp.com/)
 
 <p align="right">(<a href="#top">back to top</a>)</p>
 
