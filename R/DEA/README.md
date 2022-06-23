@@ -20,7 +20,7 @@
     <img src="DNA_microarray.svg" alt="Logo" width="80" height="80">
   </a>
 
-  <h3 align="center">Best-README-Template</h3>
+  <h3 align="center">Differential Expression Analysis</h3>
 
   <p align="center">
     Analyze multiple datasets without even sweating!
@@ -38,7 +38,6 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-There are many great README templates available on GitHub; however, I didn't find one that really suited my needs so I created this enhanced one. I want to create a README template so amazing that it'll be the last one you ever need -- I think this is it.
 
 The purpose of this project is to be capable of:
 * Selecting in a faster way from all the microarray repositories the datasets of your interest
@@ -47,9 +46,7 @@ The purpose of this project is to be capable of:
 * Use genes significantly expressed in order to perform a pathway analysis.
 
 
-### Built With
-
-This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
+### Built With R
 
 * [Biobase]()
 * [ArrayExpress]()
