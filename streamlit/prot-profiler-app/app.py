@@ -5,8 +5,8 @@ import pandas as pd
 import numpy as np
 from collections import Counter
 from Bio.Align import substitution_matrices
-st.markdown("<h1 style='text-align: center; color: white;'>Prot-Profiler</h1>", unsafe_allow_html=True)
-st.markdown("""<h5 style='text-align: center; color: white;'>A streamlit app to generate Hidden Markov Profiles from a list of proteins,
+st.markdown("<h1 style='text-align: center; color: red;'>Prot-Profiler</h1>", unsafe_allow_html=True)
+st.markdown("""<h5 style='text-align: center; color: red;'>A streamlit app to generate Hidden Markov Profiles from a list of proteins,
 as well as the correspondent progressive MSA used (Multiple Sequence Alignment). The output are the transition and emission matrices (
 dataframe objects) of the profile</h5>""", unsafe_allow_html=True)
 st.markdown('---')
