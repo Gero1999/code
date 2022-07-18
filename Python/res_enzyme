@@ -1,0 +1,360 @@
+# CLONE TRIGGER
+
+import pandas as pd
+import lxml
+import numpy as np
+import os
+import re
+
+os.chdir('/data/restriction_enzymes')
+
+
+# WEB INFO & INPUT DATA
+st.markdown("<h1 style='text-align: center; color: red;'>Clone-Trigger</h1>", unsafe_allow_html=True)
+st.markdown("""<h5 style='text-align: center; color: red;'>Do you want to know what is the most proper enzyme to use
+in your cloning? Give us the whole fragment of DNA where the insert you want to extract is located and we will make a 
+profile study and give you all the information that you would like to know before making the decission</h5>""", unsafe_allow_html=True)
+st.markdown('---')
+
+
+with st.form(key='my_form'):
+    seq = st.text_area(label='► Whole fragment of DNA',
+                       value='''AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGAGTCGAAGGAGTCGAAGGAGTCGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA''')
+
+    inter = st.text_area(label='► Whole fragment of DNA',
+                         value='''GAGTCGAAGGAGTCGAAGGAGTCGAAG''')
+
+    sub_mtx_name = st.selectbox('► Open Reading Frame (ORF)', options=['Exact-cut in ORF=0', 0, 1, 2], index=0)
+    PC = st.select_slider('► Insert integrity factor: Specifies how many times you prioritize mismatches outside your insert', options=list(range(1,11)))
+    submit_button = st.form_submit_button(label='Submit')
+
+if submit_button:
+    regions = seq.rpartition(inter)
+
+
+
+# Input
+
+
+seq = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGAGTCGAAGGAGTCGAAGGAGTCGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+inter =                                   'GAGTCGAAGGAGTCGAAGGAGTCGAA'
+regions = seq.rpartition(inter)
+integrity_factor = 3    # Indicates how preferable is to change a base exterior to the fragment than one inside of it
+orf=0
+orf = False
+
+
+# LOAD THE DATA
+# Load enzymes, discard all enzymes cutting out of the recognition sequence (or do not cut)
+enzs = pd.read_excel('re_enzymes.xlsx')
+enzs = enzs.loc[enzs['res_site'].str.contains('\(.*\)', regex=True)==False]
+enzs = enzs.loc[enzs['res_site'].str.contains('\/', regex=True)==True]
+
+# Create new columns:  1) Right fragment and 2) Left fragment after the restriction cut
+enzs[['lseq', 'rseq']] = enzs['res_site'].str.split('/', 1, expand=True)
+
+
+dicc = {'N':'CGAT', 'A':'A', 'C':'C', 'G':'G', 'T':'T',
+        'R':'GC', 'Y':'CT', 'K':'GT', 'M':'AT', 'S':'GC',
+        'W':'AT', 'B':'GTC', 'D':'GAT', 'H':'CTA', 'V':'GCA', '/':'/'}
+
+def comp_dna(dna_seq):
+    '''Determine the complementary DNA strand given a sequence (str)'''
+    return ''.join({'A':'T', 'C':'G', 'G':'C', 'T':'A'}[bp] for bp in dna_seq[::-1])
+
+def eval(s1, s2):
+    '''Count number of mismatches between two strings; the site (s1) and the enzyme's recognition site (s2)'''
+    return sum(bp1 not in dicc[bp2] for bp1,bp2 in zip(s1,s2))
+
+def eval(s1, s2):
+    '''Count number of mismatches between two strings; the site (s1) and the enzyme's recognition site (s2)'''
+    return np.array([bp1 not in dicc[bp2] for bp1,bp2 in zip(s1,s2)])
+
+np.array([1,3,1,3])[eval('AAAA', 'AATA')]
+
+def create_restriction(dna_site, enz_site):
+    '''Generate the correspondant primer considering the site (s1) and the enzyme's recognition site (s2)'''
+    return ''.join([bp1 if bp1 in dicc[bp2] else dicc[bp2][0] for bp1,bp2 in zip(dna_site,enz_site)])
+
+
+def priming(enz_site, lseq, seq, len_primer, ORS=0, insert_in_right=True):
+    '''Produces a forward primer based on a sequence (seq) whose left part (lseq) is used to produce a restriction site into
+    a forward primer whose fitness is evaluated based on a scoring vector dependent on the alteration of the insert/rest of sequence'''
+    # Based on what can the enzyme recognise and our DNA design a restriction site
+    lenz, renz = enz_site.split('/')
+    st, end = (len(lseq) - len(lenz) - ORS, len(lseq) + len(renz) - ORS)
+    res_site = create_restriction(seq[st:end], lenz + renz)
+
+    # Evaluate how good is the restriction site (mutagenesis) and how much it changes the cloning insert and the whole sequence
+    if insert_in_right:
+        seq_eval = np.repeat([1, integrity_factor], [len(lseq), len(seq)-len(lseq)])
+    else:
+        seq_eval = np.repeat([integrity_factor, 1], [len(lseq), len(seq)-len(lseq)])
+    eval_vr = seq_eval[st:end][eval(seq[st:end], res_site)]
+
+    # The primer should have a specific lenght (superior than the restriction site)
+    # If distribution is asymetrical, take 1 base more from the side with a G/C (benefits stronger binding)
+    extra_pb = len_primer - len(res_site)
+    if extra_pb % 2 == 1:
+        if seq[st-int(len_primer/2)-1 : st-int(len_primer/2)] in 'GC':
+            primer = seq[st - int(extra_pb / 2) - 1:st] + res_site + seq[end + 1:end + int(extra_pb / 2)]
+        else:
+            primer = seq[st - int(extra_pb / 2):st] + res_site + seq[end + 1:end + int(extra_pb / 2) + 1]
+    else:
+        primer = seq[st - int(extra_pb / 2):st] + res_site + seq[end + 1:end + int(extra_pb / 2)]
+
+    return {'Primer': primer,
+            'Recognition site': lenz + '/' + renz,
+            'Nr. mismatch outside': np.count_nonzero(eval_vr == 1),
+            'Nr. mismatch inside': np.count_nonzero(eval_vr == integrity_factor),
+            'Mismatch score': np.sum(eval_vr)}
+
+
+enz_site=enzs.loc[0]['res_site']
+len_primer=18
+seq='AGCACAACGACGGAACAAAACAGGCAAAGAGTCGAAGGAGTCGAAGGAGTCGAATTTTTTAATCCCCTACTTTCC'
+inter =                         'GAGTCGAAGGAGTCGAAGGAGTCGAA'
+lseq, insert, rseq = seq.rpartition(inter)
+orf = 0
+
+ors_variable = np.array(range(0,st-orf, 3))
+priming(enzs.loc[0]['res_site'], lseq+insert, seq, len_primer, ORS=0, insert_in_right=False)
+
+
+
+
+
+
+
+
+# If ORF is exact
+dna = '/'.join(seq.rpartition(inter))
+dna_eval = np.repeat([1, integrity_factor],[len(a) for a in seq.rpartition(inter)][0:1])
+
+enz1, enz2
+dna_sites = [(dna[m.start(0):m.end(0)], dna_eval[m.start(0):m.end(0)]) for m in re.finditer('[ACGT\*]{'+str(len(enz1))+'}\/[ACGT\*]{'+str(len(enz2))+'}', dna)]
+res_site = create_restriction(dna_sites[0][0], enz_site)
+eval_vr = dna_sites[0][1][eval(dna_sites[0][0], res_site)]
+
+
+# Make it for non perfect orf
+st, end = re.search('[ACGT\*]{'+str(len(enz1))+'}\/[ACGT\*]{'+str(len(enz2))+'}', dna).span()
+ors_variable = np.array(range(0,st-orf, 3))
+[(dna[st-ors:st-ors+len(enz1)]+'/'+dna[st-ors+len(enz1):st-ors+len(enz1+enz2)],  dna_eval[st-ors:end-ors]) for ors in ors_variable]
+
+
+
+
+res_site_search = "[ACGT]{"+str(len(enz1))+'}([ACGT]{'+str(len(enz2))+'}'
+dna_site = re.search('[ACGT\*]{5}\([ACGT\*]{5}', 'AGAAAAA(AAAAAAAAGGGG').group()
+
+
+
+
+
+
+
+def forward_primer(enz1, dna1, enz2, dna2, ors=0, integrity_factor=2, reverse=False): # ors: open reading span
+
+    if ors<0:
+        dna1 = dna1[:ors]
+        dna2 = dna1[ors:]+dna2
+
+    if reverse:
+        score_system = [integrity_factor, 1]
+    else:
+        score_system = [1, integrity_factor]
+
+    if -ors < len(enz1+enz2):
+        eval_vr = np.repeat(score_system, [len(enz1)-ors, len(enz2)+ors], axis=0)
+    else:
+        eval_vr = np.repeat(1, len(enz1+enz2))
+
+    rec_site = priming_site(dna1[::-1], enz1[::-1])[::-1] + priming_site(dna2, enz2)
+    eval_vr = eval_vr[eval(dna1[-len(enz1):]+dna2[:len(enz2)], rec_site)]
+    primer = dna1[:-len(enz1)] + rec_site + dna2[len(enz2):]
+    if reverse:
+        primer = comp_dna(primer)
+
+    return {'Primer': primer,
+            'Nr. mismatch outside': np.count_nonzero(eval_vr==1),
+            'Nr. mismatch inside': np.count_nonzero(eval_vr==integrity_factor),
+            'Mismatch score': np.sum(eval_vr)}
+
+
+
+if len_primer % 2 == 1:
+        if bool(re.search("[GC]", regions[0][-int(len_primer / 2) - 1:-int(len_primer / 2)])):
+            dna1 = regions[0][-int(len_primer / 2) - 1:]
+            dna2 = regions[1][:int(len_primer / 2)]
+        else:
+            dna1 = regions[0][-int(len_primer / 2):]
+            dna2 = regions[1][:int(len_primer / 2) + 1]
+
+        if bool(re.search("[GC]", regions[1][-int(len_primer / 2) - 1:-int(len_primer / 2)])):
+            dna3 = regions[1][-int(len_primer / 2) - 1:]
+            dna4 = regions[2][:int(len_primer / 2)]
+        else:
+            dna3 = regions[1][-int(len_primer / 2):]
+            dna4 = regions[2][:int(len_primer / 2) + 1]
+
+
+
+forw_df = pd.DataFrame({}, columns=('Recognition site in DNA', 'Forward primer', 'Recognition sequence',  'Nr. mismatch outside', 'Nr. mismatch inside', 'Mismatch score'), index=enzs['enzyme'])
+revr_df = pd.DataFrame({}, columns=('Reverse primer', 'Recognition sequence', 'Recognition site in DNA', 'Nr. mismatch outside', 'Nr. mismatch inside', 'Mismatch score'))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+enz_row = enzs.loc[34]
+
+for i,enz_row in enzs.iterrows():
+    print(enz_row)
+    enz1, enz2 = enz_row['res_site'].split('/')
+
+    # Primer 1 (left primer) is calculated for each enzyme in the specific fragment
+    forw_df = forw_df.append(forward_primer(enz1, dna1, enz2, dna2), ignore_index=True) | {'enzyme':enz_row['enzyme']}
+
+    p2_df = forward_primer(enz1, dna1, enz2, dna2, reverse=True)
+
+    # Priemr 2 (right primer) is calculated for each enzyme in the specific fragments
+    p2_df = p2_df.append(primer_and_info(regions[1], regions[2],
+                                         enz_row['left_seq'], enz_row['right_seq'],
+                                         len_primer), ignore_index=True)
+
+
+ forward_primer(enz1, dna1, enz2, dna2, ors=0, integrity_factor=2, insert_right=True)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# -------------------------------------------------------------------------
+enzs = enzs.loc[enzs['res_site'].str.contains('\(.*\)', regex=True)==False]
+enzs = enzs.loc[enzs['res_site'].str.contains('\/', regex=True)==True]
+
+
+# Create new columns:  1) Right fragment and 2) Left fragment after the restriction cut
+enzs[['left_seq', 'right_seq']] = enzs['res_site'].str.split('/', 1, expand=True)
+
+# Cheap enzymes and preference in use
+"EcoRI", "XbaI", "KpnI", "NdeI", "EcoRV"
+
+dicc = {'N':'CGAT', 'A':'A', 'C':'C', 'G':'G', 'T':'T',
+        'R':'GC', 'Y':'CT', 'K':'GT', 'M':'AT', 'S':'GC',
+        'W':'AT', 'B':'GTC', 'D':'GAT', 'H':'CTA', 'V':'GCA', '':''}
+
+def comp_dna(dna_seq):
+    '''Determine the complementary DNA strand given a sequence (str)'''
+    return ''.join({'A':'T', 'C':'G', 'G':'C', 'T':'A'}[bp] for bp in dna_seq[::-1])
+
+def eval(s1, s2):
+    '''Count number of mismatches between two strings; the site (s1) and the enzyme's recognition site (s2)'''
+    return sum(bp1 not in dicc[bp2] for bp1,bp2 in zip(s1,s2))
+
+def primer(s1, s2):
+    '''Generate the correspondant primer considering the site (s1) and the enzyme's recognition site (s2)'''
+    return ''.join([bp1 if bp1 in dicc[bp2] else dicc[bp2][0] for bp1,bp2 in zip(s1,s2)])
+
+# Discard enzymes repeated more than once in the sequence
+for n in enzs.index:
+    search_seq = ''.join(['['+ dicc[l] +']' for l in enzs['rseq'][n]])
+    if 1<seq.count(search_seq):
+        enzs.drop(n)
+
+
+seq = 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGAGTCGAAGGAGTCGAAGGAGTCGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA'
+inter =                                   'GAGTCGAAGGAGTCGAAGGAGTCGAA'
+regions = seq.rpartition(inter)
+integrity_factor = 3    # Indicates how preferable is to change a base exterior to the fragment than one inside of it
+orf=0
+
+
+dna_leftSeq = regions[0]
+dna_rightSeq = regions[1]
+enz_leftSeq = enzs['left_seq'][164]
+enz_rightSeq = enzs['right_seq'][164]
+len_primer = 12
+#----------------------------------------------
+
+def primer_and_info(dna_leftSeq, dna_rightSeq, enz_leftSeq, enz_rightSeq, len_primer, ins_start=0):
+    if len_primer%2==1:
+        if bool(re.search("[GC]", reg_leftSeq[-int(len_primer / 2) - 1:-int(len_primer / 2)])):
+            a=1; b=0
+        else:
+            b=1; a=0
+    else:
+        a=0; b=0
+
+    dna_leftSeq = dna_leftSeq[-int(len_primer/2)+a:]
+    dna_rightSeq = dna_rightSeq[:int(len_primer/2)+b]
+
+    enzLseq = primer(dna_leftSeq[-len(enz_leftSeq):], enz_leftSeq)
+    enzRseq = primer(dna_rightSeq[:len(enz_leftSeq)], enz_rightSeq)
+
+    return {'Enzyme':enz_row['enzyme'],
+            'Primer': dna_leftSeq[0:-len(enz_leftSeq)] + enzLseq + enzRseq + dna_rightSeq[len(enz_rightSeq):],
+            'Recognition sequence':enz_leftSeq+enz_rightSeq,
+            'Recognition site in DNA': enzLseq + enzRseq,
+            'Nr. mismatch outside':eval(enzLseq + enzRseq[:ins_start], enz_leftSeq),
+            'Nr. mismatch inside':eval(enzRseq[ins_start:], enz_rightSeq)}
+
+
+p1_df = pd.DataFrame({}, columns=('Enzyme', 'Primer', 'Recognition sequence', 'Recognition site in DNA', 'Nr. mismatch outside', 'Nr. mismatch inside'))
+p2_df = pd.DataFrame({}, columns=('Enzyme', 'Primer', 'Recognition sequence', 'Recognition site in DNA', 'Nr. mismatch outside', 'Nr. mismatch inside'))
+
+for i,enz_row in enzs.iterrows():
+    # Primer 1 (left primer) is calculated for each enzyme in the specific fragment
+    p1_df = p1_df.append(primer_and_info(regions[0], regions[1],
+                                         enz_row['left_seq'], enz_row['right_seq'],
+                                         len_primer), ignore_index=True)
+
+    # Priemr 2 (right primer) is calculated for each enzyme in the specific fragments
+    p2_df = p2_df.append(primer_and_info(regions[1], regions[2],
+                                         enz_row['left_seq'], enz_row['right_seq'],
+                                         len_primer), ignore_index=True)
+
+
+# One of the primers has to be in the complementary strand... (P2)
+p2_df['Primer'] = p2_df['Primer'].map(comp_dna)
+p2_df['Recognition site in DNA'] = p2_df['Recognition site in DNA'].map(comp_dna)
+
+df_p1['mism score P1'] = df_p1
+df_p2 = enzs.sort_values('mism score P2')[['enzyme', 'res_site', 'Primer 2', 'mism insert P2', 'mism ext P2']]
+
+df_p1 = enzs.sort_values('mism score P1')[['enzyme', 'res_site', 'Primer 1', 'mism insert P1', 'mism ext P1']]
+df_p2 = enzs.sort_values('mism score P2')[['enzyme', 'res_site', 'Primer 2', 'mism insert P2', 'mism ext P2']]
