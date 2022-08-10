@@ -72,39 +72,32 @@ Then the first thing the algorithm will do is perform a Multiple Sequence Alignm
 
 <code>
 F·VEI·PRES···VRLMA·E····STGL···E·····L·SDEV···A·ALLAE·DVC·YR··LREA··T···Q·NSSQ·F···MKHTKRRK··LT···VEDFNRA··LR
+
 MSI·V·PKETIE·V··IG·Q····SVGI·AN······LPAD·V·SAA···LAP·DV·EYR··LRE····I·MQ····EAIKC·MRHAK·R·TVLTADDV·D·S·ALSLR
+
 MSI··VPKETV·EV··IA·QS····IGIT·NLL·····P·E···AAL··MLAP·DV·EYR··VRE···IMQ···EAI·KC·MR·HSK·R·TTLT·ASDV·D·G·ALNLR
-LTVWNI··ESIKDV···AE·M·LG···I·GN·LADEP··A··A··AIAM···DL·EYRIH·Q··VVQ···E·A·TK·FM·V··HSK·R·T·VLTSA·DI·S·S·A··LR·TIWS·PQDTVKDV···AE··SLGLENI··N···DD······VLKALAM···DV·EYRI·LE··II····EQA·VK·F···KRHSK·R··DVLTT·DDV···SKA··LR
+  LTVWNI··ESIKDV···AE·M·LG···I·GN·LADEP··A··A··AIAM···DL·EYRIH·Q··VVQ···E·A·TK·FM·V··HSK·R·T·VLTSA·DI·S·S·A··LR·TIWS·PQDTVKDV···AE··SLGLENI··N···DD······VLKALAM···DV·EYRI·LE··II····EQA·VK·F···KRHSK·R··DVLTT·DDV···SKA··LR
 </code>
 
+Once this results are obtained, the algorithm will determine which columns/positions are match-states (M) or insertion states (I) based on a simple rule: Insetion states are those who present more than 50% gaps, thus it is rare to encounter "additional" residues. 
 
+Afterwards, all insertion states are considered the same in terms of emissions, they all are expected to randomly add aminoacids (this is obviously a mathematical simplification).
 
+On the other hand, for each match state the algorithm calculates its emission rates based on the frequency of appearance of each aminoacid. If the user doesn't count with many sequences, it is recommended to include a pseudocount value (PC>0) to elude impossible cases in terms of emission.
 
-_For more examples, please refer to the [Documentation](https://example.com)_
+![image](https://user-images.githubusercontent.com/68994823/184028216-65de0850-4e13-49c1-959d-8d54682b31cc.png)
 
-<p align="right">(<a href="#top">back to top</a>)</p>
+Finally, based on the sequency of letters and gaps by each sequence, a transition matrix is calculated for the different states. Transitions can occur to a match state (letter in a match column), deletion state (gap in a match column) or insertion state (letter in a insertion column).
 
+![image](https://user-images.githubusercontent.com/68994823/184028097-29240fc0-a664-459a-b37c-673d1245d689.png)
 
+With all this information, we have developed a HMM-profile. Now you can use your information in order to generate new potential proteins that were considered from the same family, or test potential members still unknown. 
 
-<!-- ROADMAP -->
-## Roadmap
-
-- [x] Add Changelog
-- [x] Add back to top links
-- [ ] Add Additional Templates w/ Examples
-- [ ] Add "components" document to easily copy & paste sections of the readme
-- [ ] Multi-language Support
-    - [ ] Chinese
-    - [ ] Spanish
-
-See the [open issues](https://github.com/othneildrew/Best-README-Template/issues) for a full list of proposed features (and known issues).
-
-<p align="right">(<a href="#top">back to top</a>)</p>
 
 
 
 <!-- ADDITIONALLY -->
-## Contact
+## Information & Contact
 
 The protein represented in the entrance of the document is the human PCNA (1AXC), you can read more about it or obtain the image in [Wikipedia](https://da.wikipedia.org/wiki/Fil:1axc_tricolor.png)
 
