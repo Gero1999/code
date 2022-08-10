@@ -221,14 +221,14 @@ if submit_button:
     st.markdown("---")
     st.markdown('''
     ## Multiple Sequence Alignment (MSA)
-    #### Letters: Residues, Dots: Gaps''')
+    ##### Letters: Residues, Dots: Gaps''')
     st.text('\n'.join(msa))
 
     st.markdown('''
-    ## Transition Daraframe of the Profile
-    #### Index:Previous state, Column: Posterior state''')
+    ## Transition Matrix of the Profile
+    ##### Index:Previous state, Column: Posterior state''')
     st.dataframe(transition_df)
     st.markdown('''
-    ## Emission Daraframe of the Profile
-    #### Index:Letter/Emission, Column: State/Sender''')
+    ## Emission Matrix of the Profile
+    ##### Index:Letter/Emission, Column: State/Sender''')
     st.dataframe(emission_df)
