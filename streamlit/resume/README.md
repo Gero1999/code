@@ -26,5 +26,15 @@
 <!-- ABOUT THE PROJECT -->
 ## About The Project
 
-You can see my credentials, projects and more in these portfolio website. By using stremalit and Pyhton programming you can also create your own online resume!
+You can see my credentials, projects and more in these portfolio website. For any more details do not hesitate to contact me! 
+
+
+
+
+### Built With
+
+This section should list any major frameworks/libraries used to bootstrap your project. Leave any add-ons/plugins for the acknowledgements section. Here are a few examples.
+
+* [Streamlit]()
+
 
