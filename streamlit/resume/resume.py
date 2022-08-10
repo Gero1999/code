@@ -127,13 +127,13 @@ st.markdown('''
 ''')
 
 
-txt('**Content Creator**, Youtube Channel: [Bio100](https://www.youtube.com/channel/UCfF_6XhQW_lJDpISf1BX68A)', '2022-Present')
+txt('**Content Creator**', '2022-Present')
 st.markdown('''
-- Biotechnology and bioinformatic fields explained from 0
-- Science communication in english to a non-specialized audience
+- Youtube Channel: [Bio100](https://www.youtube.com/channel/UCfF_6XhQW_lJDpISf1BX68A)
+- Science blog: [Science Speaking](https://www.blogger.com/blog/post/edit/7655191534939538062/4726574264367144259)
 ''')
 
-txt('**Participation in short-films and development of theatre plays**','2022-Present')
+txt('**Short films and theatre plays**','2022-Present')
 st.markdown('''
 - Improvisation and presentation skills
 - Organization and teamwork experience
@@ -142,18 +142,21 @@ st.markdown('''
 #####################
 st.markdown(''' '''); st.markdown(''' ''')
 st.markdown('''
-## Bioinformatic Tools & Pipelines
+## Bioinformatic Tools & Guidelines
 ---
 ''')
 st.markdown('''► [HMM-profiler](https://share.streamlit.io/gero1999/code/main/streamlit/prot-profiler-app/app.py). Generates the 
             multiple sequence alignment (MSA) of a list of input sequences, as well as the transition and emission matrices 
             defining its Hidden Markov Model profile capturing amino acid conservation and protein family features''')
 
-st.markdown('''► [PairAlign](https://gero1999.shinyapps.io/Pair-Aligner/). Global pair-sequence aligner tool implementing
- the Needleman algorithm (Dynamic programming) by using the scoring system and the linear gap penalty specified by the user for the 2 DNA sequences given as input''')
+st.markdown('''► [Clone-Trigger](https://gero1999-code-streamlitclone-triggerapp-r6g3cw.streamlitapp.com/). Identifier of the optimal forward and reverse primers needed in the cloning process 
+of a fragment based on the desired ORF and the fragment employeed''')
 
 st.markdown('''► [Texas-Cheater](https://gero1999.shinyapps.io/Texas-Cheater/). A Poker simulator that given the user cards and the number of players computes a customizable 
 number of games to predict the chances to possess the winning hand.''')
+
+st.markdown('''► [PairAlign](https://gero1999.shinyapps.io/Pair-Aligner/). Global pair-sequence aligner tool implementing
+ the Needleman algorithm (Dynamic programming) by using the scoring system and the linear gap penalty specified by the user for the 2 DNA sequences given as input''')
 
 st.markdown('''► [Statistics from scratch](https://rpubs.com/Gero1999/872369). An initial statistics guide to those who want to learn the fundamentals of the subject using only basic R''')
 
