@@ -1,5 +1,4 @@
-# CLONE TRIGGER
-
+# IMPORTED MODULES
 import pandas as pd
 import numpy as np
 import os
@@ -11,12 +10,12 @@ pip.main(["install", "openpyxl"])
 
 
 # WEB INFO & INPUT DATA
-st.set_page_config(layout='centered')
-st.image('dna_image.png', width=100)
-st.markdown("<h1 style='text-align: center; color: red;'>Clone-Trigger</h1>", unsafe_allow_html=True)
-st.markdown("""<h5 style='text-align: center; color: red;'>Do you want to know what is the most proper enzyme to use
-in your cloning? Give us the whole fragment of DNA where the insert you want to extract is located and we will make a 
-profile study and give you all the information that you would like to know before making the decission</h5>""", unsafe_allow_html=True)
+st.set_page_config(page_title='Clone Trigger App', page_icon="🧬",layout='centered')
+st.markdown("<h1 style='text-align: center; color: red;'> Clone-Trigger</h1>", unsafe_allow_html=True)
+st.markdown('---')
+st.markdown("""<h5 style='text-align: justify; color: red;'>Do you want to know what is the perfect enzyme to use
+in your cloning? Give us the whole fragment of DNA and the precise insert you want to extract and we will make a 
+profile study to give you the primers that you need (if you do)</h5>""", unsafe_allow_html=True)
 
 
 with st.form(key='my_form'):
@@ -28,20 +27,19 @@ with st.form(key='my_form'):
     submit_button = st.form_submit_button(label='Submit')
 
 with st.sidebar:
-    st.markdown("<h3 style='text-align: center; style:bold; color: blue;'>Primers specifications</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; style:bold; color: red;'>Primers specifications</h3>", unsafe_allow_html=True)
     st.markdown('---')
     orf = st.radio('► Open Reading Frame (ORF)', options=['Exact-cut', 0, 1, 2], index=0)
     integrity_factor = st.select_slider('► Insert integrity factor: Prioritization ratio of mismatches inside/outside your cloning insert', options=list(range(1,11)))
     len_primer = st.select_slider('► Insert desired primer length: Number of nucleotides per primer (forward & reverse)', options=list(range(12,31)))
     st.markdown('---')
-    st.write("[![Star](<https://img.shields.io/github/stars/><username>/<repo>.svg?logo=github&style=social)](<https://gitHub.com/><username>/<repo>)")
 
 if submit_button:
     # Define from the sequence the different parts 
     lseq, insert, rseq = seq.rpartition(inter)
 
     # Disconsider those enzymes with inexact cuts or which restriction site surpasses the length of the primers
-    enzs = pd.read_excel('re_enzymes.xlsx')
+    enzs = pd.read_excel('https://github.com/Gero1999/data/blob/main/enzymes/re_enzymes.xlsx')
     enzs = enzs.loc[enzs['Restriction Site'].str.contains('\(.*\)', regex=True)==False]
     enzs = enzs.loc[enzs['Restriction Site'].str.contains('\/', regex=True) == True]
     enzs = enzs.loc[np.array([True if len(enz)<=len_primer else False for enz in enzs['Restriction Site']])]
@@ -106,7 +104,6 @@ if submit_button:
     revr_df = pd.DataFrame({}, columns=('Primer', 'Enzyme', 'Recognition site', 'Nr. mismatch outside',  'Nr. mismatch inside', 'Mismatch score', 'ORS'))
 
     for name, enz in zip(enzs['Enzyme'],enzs['Restriction Site']):
-
         # Determine the opening read starts (ors) of the primers based on selected ORF
         if type(orf)==int:
             ors_to_iterate = np.array(range(0,len(lseq)-orf-len(enz.split('/')[0]),3))
