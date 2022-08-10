@@ -36,6 +36,7 @@ if submit_button:
 
     # Disconsider those enzymes with inexact cuts or which restriction site surpasses the length of the primers
     enzs = pd.read_csv('https://github.com/Gero1999/data/blob/main/enzymes/re_enzymes.csv', sep=',', on_bad_lines='skip')
+    st.dataframe(enzs.head(5))
     enzs = enzs.loc[enzs['Restriction Site'].str.contains('\(.*\)', regex=True)==False]
     enzs = enzs.loc[enzs['Restriction Site'].str.contains('\/', regex=True) == True]
     enzs = enzs.loc[np.array([True if len(enz)<=len_primer else False for enz in enzs['Restriction Site']])]
