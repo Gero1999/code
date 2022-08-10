@@ -4,6 +4,7 @@ from PIL import Image
 import pandas as pd
 import numpy as np
 from collections import Counter
+import pyperclip
 from Bio.Align import substitution_matrices
 st.markdown("<h1 style='text-align: center; color: red;'>Prot-Profiler</h1>", unsafe_allow_html=True)
 st.markdown("""<h5 style='text-align: center; color: #805252;'>A streamlit app to generate Hidden Markov Profiles from a list of proteins,
@@ -229,10 +230,12 @@ if submit_button:
     ## Transition Matrix of the Profile
     ##### Index: Previous state, Column: Posterior state''')
     st.dataframe(transition_df)
+    pyperclip.copy(transition_df.to_csv())
     st.markdown('''
     ## Emission Matrix of the Profile
     ##### Index: Letter/Emission, Column: State/Sender''')
     st.dataframe(emission_df)
+    pyperclip.copy(emission_df.to_csv())
     st.markdown('---')
     st.markdown('''#### States legend:
     B-Begin, M-Match, I-Insertion, D-Deletion, E-End''')
