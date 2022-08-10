@@ -233,5 +233,7 @@ if submit_button:
     ##### Index: Letter/Emission, Column: State/Sender''')
     st.dataframe(emission_df)
     st.markdown('---')
-    st.markdown('States legend: B-Begin, M-Match, I-Insertion, E-End')
+    st.markdown('''
+    ####States legend: 
+    B-Begin, M-Match, I-Insertion, E-End''')
     
