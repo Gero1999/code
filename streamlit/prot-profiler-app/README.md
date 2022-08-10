@@ -73,9 +73,12 @@ Then the first thing the algorithm will do is perform a Multiple Sequence Alignm
 <code>
 F·VEI·PRES···VRLMA·E····STGL···E·····L·SDEV···A·ALLAE·DVC·YR··LREA··T···Q·NSSQ·F···MKHTKRRK··LT···VEDFNRA··LR
 
+  
 MSI·V·PKETIE·V··IG·Q····SVGI·AN······LPAD·V·SAA···LAP·DV·EYR··LRE····I·MQ····EAIKC·MRHAK·R·TVLTADDV·D·S·ALSLR
 
+  
 MSI··VPKETV·EV··IA·QS····IGIT·NLL·····P·E···AAL··MLAP·DV·EYR··VRE···IMQ···EAI·KC·MR·HSK·R·TTLT·ASDV·D·G·ALNLR
+  
   LTVWNI··ESIKDV···AE·M·LG···I·GN·LADEP··A··A··AIAM···DL·EYRIH·Q··VVQ···E·A·TK·FM·V··HSK·R·T·VLTSA·DI·S·S·A··LR·TIWS·PQDTVKDV···AE··SLGLENI··N···DD······VLKALAM···DV·EYRI·LE··II····EQA·VK·F···KRHSK·R··DVLTT·DDV···SKA··LR
 </code>
 
