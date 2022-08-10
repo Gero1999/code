@@ -25,7 +25,7 @@ with st.form(key='my_form'):
 
     sub_mtx_name = st.selectbox('► Substitution matrix for the MSA', options=substitution_matrices.load(), index=3)
     PC = st.radio('► Pseudocount constant: Eludes unobserved cases to be impossible', options=[0, 1, 2, 3])
-    st.write('<style>div.row-widget.stRadio > div{flex-direction:row;justify-content: center;} </style>', unsafe_allow_html=True)
+    st.write('<style>div.row-widget.stRadio > div{flex-direction:row;} </style>', unsafe_allow_html=True)
     submit_button = st.form_submit_button(label='Submit')
 
 if submit_button:
