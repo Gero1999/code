@@ -9,6 +9,7 @@ st.markdown("<h1 style='text-align: center; color: red;'>Prot-Profiler</h1>", un
 st.markdown("""<h5 style='text-align: center; color: #805252;'>A streamlit app to generate Hidden Markov Profiles from a list of proteins,
 as well as the correspondent progressive MSA used (Multiple Sequence Alignment). The output are the transition and emission matrices (
 dataframe objects) of the profile</h5>""", unsafe_allow_html=True)
+st.write('<style>div.Widget.row-widget.stRadio > div{flex-direction:row;}</style>', unsafe_allow_html=True)
 st.markdown('---')
 
 # Input data
@@ -24,7 +25,7 @@ with st.form(key='my_form'):
                          TIWSPQDTVKDVAESLGLENINDDVLKALAMDVEYRILEIIEQAVKFKRHSKRDVLTTDDVSKALR''')
 
     sub_mtx_name = st.selectbox('► Substitution matrix for the MSA', options=substitution_matrices.load(), index=3)
-    PC = st.select_slider('► Pseudocount constant to elude unobserved cases to be impossible', options=[0, 1, 2, 3])
+    PC = st.radio('► Pseudocount constant: Eludes unobserved cases to be impossible', options=[0, 1, 2, 3])
     submit_button = st.form_submit_button(label='Submit')
 
 if submit_button:
