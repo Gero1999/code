@@ -235,5 +235,5 @@ if submit_button:
     st.dataframe(emission_df)
     st.markdown('---')
     st.markdown('''#### States legend:
-    B-Begin, M-Match, I-Insertion, E-End''')
+    B-Begin, M-Match, I-Insertion, D-Deletion, E-End''')
     
