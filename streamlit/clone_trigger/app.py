@@ -35,7 +35,7 @@ if submit_button:
     lseq, insert, rseq = seq.rpartition(inter)
 
     # Disconsider those enzymes with inexact cuts or which restriction site surpasses the length of the primers
-    enzs = pd.read_csv('https://github.com/Gero1999/data/blob/main/enzymes/re_enzymes.csv')
+    enzs = pd.read_csv('https://github.com/Gero1999/data/blob/main/enzymes/re_enzymes.csv', sep=',')
     enzs = enzs.loc[enzs['Restriction Site'].str.contains('\(.*\)', regex=True)==False]
     enzs = enzs.loc[enzs['Restriction Site'].str.contains('\/', regex=True) == True]
     enzs = enzs.loc[np.array([True if len(enz)<=len_primer else False for enz in enzs['Restriction Site']])]
