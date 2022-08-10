@@ -59,7 +59,26 @@ This section should list any major frameworks/libraries used to bootstrap your p
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
+Let's imagine you have 3 (or more) sequences of proteins that are partially related, mayben even from the same family. In the given example, they belong to the TAF family (which is characterized for very small proteins). Make sure to separate them by a new line (\n) like this:
+
+<code>
+  FVEIPRESVRLMAESTGLELSDEVAALLAEDVCYRLREATQNSSQFMKHTKRRKLTVEDFNRALRMSIVPKETIEVIGQSVGIANLPADVSAALAPDVEYRLREIMQEAIKCMRHAKRTVLTADDVDSALSLR
+                         MSIVPKETVEVIAQSIGITNLLPEAALMLAPDVEYRVREIMQEAIKCMRHSKRTTLTASDVDGALNLRLTVWNIESIKDVAEMLGIGNLADEPAAAIAMDLEYRIHQVVQEAKFMVHSKRTVLTSADISSALR
+
+TIWSPQDTVKDVAESLGLENINDDVLKALAMDVEYRILEIIEQAVKFKRHSKRDVLTTDDVSKALR
+</code>
+
+Then the first thing the algorithm will do is perform a Multiple Sequence Alignment (sequential alignment based on pairs score) in order to determine a common way to compare the residues of each protein/fragment by their position. The dots represent the gaps in the alignment:
+
+<code>
+F·VEI·PRES···VRLMA·E····STGL···E·····L·SDEV···A·ALLAE·DVC·YR··LREA··T···Q·NSSQ·F···MKHTKRRK··LT···VEDFNRA··LR
+MSI·V·PKETIE·V··IG·Q····SVGI·AN······LPAD·V·SAA···LAP·DV·EYR··LRE····I·MQ····EAIKC·MRHAK·R·TVLTADDV·D·S·ALSLR
+MSI··VPKETV·EV··IA·QS····IGIT·NLL·····P·E···AAL··MLAP·DV·EYR··VRE···IMQ···EAI·KC·MR·HSK·R·TTLT·ASDV·D·G·ALNLR
+LTVWNI··ESIKDV···AE·M·LG···I·GN·LADEP··A··A··AIAM···DL·EYRIH·Q··VVQ···E·A·TK·FM·V··HSK·R·T·VLTSA·DI·S·S·A··LR·TIWS·PQDTVKDV···AE··SLGLENI··N···DD······VLKALAM···DV·EYRI·LE··II····EQA·VK·F···KRHSK·R··DVLTT·DDV···SKA··LR
+</code>
+
+
+
 
 _For more examples, please refer to the [Documentation](https://example.com)_
 
