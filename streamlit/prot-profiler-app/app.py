@@ -226,9 +226,12 @@ if submit_button:
 
     st.markdown('''
     ## Transition Matrix of the Profile
-    ##### Index:Previous state, Column: Posterior state''')
+    ##### Index: Previous state, Column: Posterior state''')
     st.dataframe(transition_df)
     st.markdown('''
     ## Emission Matrix of the Profile
-    ##### Index:Letter/Emission, Column: State/Sender''')
+    ##### Index: Letter/Emission, Column: State/Sender''')
     st.dataframe(emission_df)
+    st.markdown('---')
+    ##### States legend: B-Begin, M-Match, I-Insertion, E-End
+    
