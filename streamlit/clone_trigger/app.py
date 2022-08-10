@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import os
 import streamlit as st
-import openpyxl
 import pip
 pip.main(["install", "openpyxl"])
 
@@ -27,7 +26,7 @@ with st.form(key='my_form'):
     submit_button = st.form_submit_button(label='Submit')
 
 with st.sidebar:
-    st.markdown("<h3 style='text-align: center; style:bold; color: red;'>Primers specifications</h3>", unsafe_allow_html=True)
+    st.markdown("<h3 style='text-align: center; style:bold; color: white;'>Primers specifications</h3>", unsafe_allow_html=True)
     st.markdown('---')
     orf = st.radio('► Open Reading Frame (ORF)', options=['Exact-cut', 0, 1, 2], index=0)
     integrity_factor = st.select_slider('► Insert integrity factor: Prioritization ratio of mismatches inside/outside your cloning insert', options=list(range(1,11)))
