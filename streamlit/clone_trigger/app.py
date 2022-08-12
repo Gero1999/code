@@ -116,7 +116,7 @@ if submit_button:
     revr_df['Primer'] = [comp_dna(reverse) for reverse in revr_df['Primer'] if type(reverse)!=float]
 
     # Results: Represent the top data with the lowest number of mismatches
-    st.markdown('''## Best forward primers''')
+    st.markdown('''## Top-20 forward primers''')
     st.dataframe(forw_df.sort_values(['Mismatch score', 'ORS']).head(20))
-    st.markdown('''## Best reverse primers''')
+    st.markdown('''## Top-20 reverse primers''')
     st.dataframe(revr_df.sort_values(['Mismatch score']).head(20))
