@@ -11,12 +11,12 @@
 
   <h3 align="center">Clone-Trigger</h3>
   
-  <a href="https://share.streamlit.io/gero1999/code/main/streamlit/prot-profiler-app/app.py"><strong>Check the app »</strong></a>
+  <a href="https://gero1999-code-streamlitclone-triggerapp-r6g3cw.streamlitapp.com/"><strong>Check the app »</strong></a>
 
   <p align="center">
     Decide your primers easiliy
     <br />
-    <a href="https://github.com/Gero1999/code/edit/main/Python/HMM_profile_analyser"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/Gero1999/code/tree/main/streamlit/clone_trigger"><strong>Explore the docs »</strong></a>
     <br />
     <br />
   </p>
