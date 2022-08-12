@@ -6,15 +6,15 @@
 <br />
 <div align="center">
   <a href="https://github.com/othneildrew/Best-README-Template">
-    <img src="protein_1axc.png" alt="Logo" width="80" height="80">
+    <img src="dna.png" alt="Logo" width="80" height="80">
   </a>
 
-  <h3 align="center">HMM-profiler</h3>
+  <h3 align="center">Clone-Trigger</h3>
   
   <a href="https://share.streamlit.io/gero1999/code/main/streamlit/prot-profiler-app/app.py"><strong>Check the app »</strong></a>
 
   <p align="center">
-    Read your proteins secrets
+    Decide your primers easiliy
     <br />
     <a href="https://github.com/Gero1999/code/edit/main/Python/HMM_profile_analyser"><strong>Explore the docs »</strong></a>
     <br />
