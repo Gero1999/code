@@ -126,7 +126,6 @@ st.markdown('''
 - Weekly group meeting expositions to present our advances
 ''')
 
-
 txt('**Content Creator**', '2022-Present')
 st.markdown('''
 - Youtube Channel: [Bio100](https://www.youtube.com/channel/UCfF_6XhQW_lJDpISf1BX68A)
@@ -160,9 +159,15 @@ st.markdown('''► [PairAlign](https://gero1999.shinyapps.io/Pair-Aligner/). Glo
 
 st.markdown('''► [Statistics from scratch](https://rpubs.com/Gero1999/872369). An initial statistics guide to those who want to learn the fundamentals of the subject using only basic R''')
 
-st.markdown('''► [Maths behind population genetics](https://rpubs.com/Gero1999/872380). Many simulation examples in order to familiarize those who are interested in population genetics models''')
-
 st.markdown('''► [This resume](https://share.streamlit.io/gero1999/code/main/streamlit/resume/resume.py). This web page was also designed using Streamlit''')
+
+
+#####################
+## Science communication
+st.markdown(''' '''); st.markdown(''' ''')
+st.markdown('''
+st.video("https://www.youtube.com/watch?v=KjA_4I8-iBI")
+
 
 
 #####################
