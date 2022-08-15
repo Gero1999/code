@@ -187,10 +187,19 @@ txt2('GitHub', 'https://github.com/Gero1999')
 txt2('ORCID', 'https://orcid.org/my-orcid?orcid=0000-0003-1413-0060')
 txt2('Email', 'gerardo.jrac@gmail.com')
 
-st.markdown('Published content')
-st.video("https://www.youtube.com/watch?v=KjA_4I8-iBI")
 
 #####################
+st.markdown(''' '''); st.markdown(''' ''')
+st.markdown('''
+## Published content
+---
+''')
+st.video("https://www.youtube.com/watch?v=KjA_4I8-iBI")
+
+
+
+#####################
+st.markdown(''' ''')
 st.markdown('''
 ## Availability
 ---
