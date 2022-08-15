@@ -162,13 +162,6 @@ st.markdown('''► [Statistics from scratch](https://rpubs.com/Gero1999/872369).
 st.markdown('''► [This resume](https://share.streamlit.io/gero1999/code/main/streamlit/resume/resume.py). This web page was also designed using Streamlit''')
 
 
-#####################
-## Science communication
-st.markdown(''' '''); st.markdown(''' ''')
-st.markdown('''
-st.video("https://www.youtube.com/watch?v=KjA_4I8-iBI")
-
-
 
 #####################
 st.markdown(''' '''); st.markdown(''' ''')
