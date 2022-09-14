@@ -204,7 +204,7 @@ st.markdown('''
 ## Availability
 ---
 ''')
-st.markdown('<iframe src="https://calendar.google.com/calendar/embed?src=og3sp800lruhb5q03g35hqcqdsnhov5j%40import.calendar.google.com&ctz=Europe%2FBerlin"  style="border:solid 1px #777" width="800" height="600" frameborder="0" scrolling="no"></iframe>',
+st.markdown('<iframe src="https://calendar.google.com/calendar/embed?height=600&wkst=2&bgcolor=%23ffffff&ctz=Europe%2FBerlin&src=Z2VyYXJkby5qcmFjQGdtYWlsLmNvbQ&src=b2czc3A4MDBscnVoYjVxMDNnMzVocWNxZHNuaG92NWpAaW1wb3J0LmNhbGVuZGFyLmdvb2dsZS5jb20&color=%23039BE5&color=%233F51B5" style="border:solid 1px #777" width="800" height="600" frameborder="0" scrolling="no"></iframe>',
            unsafe_allow_html=True)
 
 ####################
