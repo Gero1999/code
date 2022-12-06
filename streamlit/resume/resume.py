@@ -118,12 +118,25 @@ st.markdown('''
 ---
 ''')
 
-txt('**Student**, [dEPIMAL](http://www.depimal.es/team.html), Madrid', '2020-2021')
+txt('**Student researcher**, [CBMR Novo Nordisk](https://cbmr.ku.dk), Copenhagen', '10/22-Present')
+st.markdown('''
+- Project involving multiple GWAS results aggregation
+- Thesis involving Mendelian randomization and causal analysis
+''')
+
+txt('**Student assistant (part-time)**, [Health Data Science Center](https://heads.ku.dk), Copenhagen', '10/22-Present')
+st.markdown('''
+- Assitance in the develop and teaching of data-science courses
+- Website and social media management
+- Assistance in the develop and testing of programming courses
+- Administration and ad-hoc tasks
+''')
+
+txt('**Student thesis**, [dEPIMAL](http://www.depimal.es/team.html), Madrid', '2020-2021')
 st.markdown('''
 - Projects regarding data analysis of biological data using R programming
 - Search of data in public repositories, QC, Exploration (PCA, heatmap)
 - Disease characterization, Factor analysis, Pathway enrichment
-- Weekly group meeting expositions to present our advances
 ''')
 
 txt('**Content Creator**', '2022-Present')
