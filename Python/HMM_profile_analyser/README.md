@@ -58,15 +58,6 @@ You can actually see a practical example with short TAF sequences in the next [s
 <p align="right">(<a href="#top">back to top</a>)</p>
 
 
-<!-- USAGE EXAMPLES -->
-## Usage
-
-You can actually see a practical example with short TAF sequences in the next [streamlit app](https://gero1999-code-streamlitprot-profiler-appapp-uorzny.streamlitapp.com/)
-
-<p align="right">(<a href="#top">back to top</a>)</p>
-
-
-
 <!-- ADDITIONALLY -->
 ## Contact
 
