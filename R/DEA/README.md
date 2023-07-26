@@ -69,7 +69,7 @@ The purpose of this project is to be capable of automatizing pipeline processes 
 
 
 
-<!-- Still in develop! -->
+<!-- STILL IN DEVELOP! -->
 
 
 
