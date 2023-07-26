@@ -39,9 +39,10 @@
 ## About The Project
 
 
-The purpose of this project is to be capable of:
-* Selecting in a faster way from all the microarray repositories the datasets of your interest
-* Simplifying metadata wihtout the intervention of the user
+The purpose of this project is to be capable of automatizing pipeline processes in order to:
+
+* Select in a faster way from all the microarray repositories the datasets of your interest
+* Simplify metadata wihtout the intervention of the user
 * Elaborate an exploratory and differential expression analysis comparing two or more situations.
 * Use genes significantly expressed in order to perform a pathway analysis.
 
@@ -68,7 +69,7 @@ The purpose of this project is to be capable of:
 
 
 
-<!-- GETTING STARTED -->
+<!-- Still in develop! -->
 
 
 
