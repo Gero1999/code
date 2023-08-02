@@ -7,7 +7,7 @@
   </a>
 
   <h3 align="center">Texas Cheater</h3>
-  <a href="https://gero1999.shinyapps.io/Pair-Aligner/"><strong>Check the app »</strong></a>
+  <a href="https://gero1999.shinyapps.io/Texas-Cheater/"><strong>Check the app »</strong></a>
   <p align="center">
     Use this Poker simulator to win all your games  
   </p>
