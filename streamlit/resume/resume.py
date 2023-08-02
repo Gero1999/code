@@ -99,15 +99,15 @@ st.markdown('''
 ---
 ''')
 
-txt('**MSc Bioinformatics**, *Copenhagen University*, Denmark', '2021-Present')
+txt('**MSc Bioinformatics**, *Copenhagen University*, Denmark', '2021-2023')
 st.markdown('''
-- Grade until now: `11` in 7-point grading scale 
-- Relevant courses taken: Population genetics, Data Science, Statistics, Structural Bioinformatics
+- GPA (Grade Point Average): 3.9 out of 4.0
+- Thesis: "Influence of body size changes from childhood on mental and cardiovascular health"
 ''')
 st.markdown(''' ''')
 txt('**BSc Biochemistry**, *Complutense University of Madrid*, Spain', '2017-2021')
 st.markdown('''
-- Grade average: `10` in 7-point grading scale 
+- GPA (Grade Point Average): 3.2 out of 4.0
 - Thesis: "Meta-analysis of RNA-seq and microarray raw data of cytarabine's action"
 ''')
 
@@ -118,13 +118,13 @@ st.markdown('''
 ---
 ''')
 
-txt('**Student researcher**, [CBMR Novo Nordisk](https://cbmr.ku.dk), Copenhagen', '10/22-Present')
+txt('**Project student**, [CBMR Novo Nordisk](https://cbmr.ku.dk), Copenhagen', '10/22-06/23')
 st.markdown('''
 - Project involving multiple GWAS results aggregation
 - Thesis involving Mendelian randomization and causal analysis
 ''')
 
-txt('**Student assistant (part-time)**, [Health Data Science Center](https://heads.ku.dk), Copenhagen', '10/22-Present')
+txt('**Student assistant (part-time)**, [Health Data Science Center](https://heads.ku.dk), Copenhagen', '10/22-07/23')
 st.markdown('''
 - Assitance in the develop and teaching of data-science courses
 - Website and social media management
@@ -132,20 +132,20 @@ st.markdown('''
 - Administration and ad-hoc tasks
 ''')
 
-txt('**Student thesis**, [dEPIMAL](http://www.depimal.es/team.html), Madrid', '2020-2021')
+txt('**Student thesis**, [dEPIMAL](http://www.depimal.es/team.html), Madrid', '01/21-07/21')
 st.markdown('''
 - Projects regarding data analysis of biological data using R programming
 - Search of data in public repositories, QC, Exploration (PCA, heatmap)
 - Disease characterization, Factor analysis, Pathway enrichment
 ''')
 
-txt('**Content Creator**', '2022-Present')
+txt('**Content Creator**', '07/22-Present')
 st.markdown('''
 - Youtube Channel: [Bio100](https://www.youtube.com/channel/UCfF_6XhQW_lJDpISf1BX68A)
 - Science blog: [Science Speaking](https://www.blogger.com/blog/post/edit/7655191534939538062/4726574264367144259)
 ''')
 
-txt('**Short films and theatre plays**','2022-Present')
+txt('**Short films and theatre plays**',' ')
 st.markdown('''
 - Improvisation and presentation skills
 - Organization and teamwork experience
@@ -172,8 +172,9 @@ st.markdown('''► [PairAlign](https://gero1999.shinyapps.io/Pair-Aligner/). Glo
 
 st.markdown('''► [Statistics from scratch](https://rpubs.com/Gero1999/872369). An initial statistics guide to those who want to learn the fundamentals of the subject using only basic R''')
 
-st.markdown('''► [This resume](https://share.streamlit.io/gero1999/code/main/streamlit/resume/resume.py). This web page was also designed using Streamlit''')
+st.markdown('''► [The maths behind population genetics models (In process!)](https://rpubs.com/Gero1999/872380). A coded explanation on how population models can help us  to study allele frequencies''')
 
+st.markdown('''► [This resume](https://share.streamlit.io/gero1999/code/main/streamlit/resume/resume.py). This web page was also designed using Streamlit''')
 
 
 #####################
@@ -198,6 +199,7 @@ st.markdown('''
 txt2('LinkedIn', 'https://www.linkedin.com/in/gerardo-ra/?locale=en_US')
 txt2('GitHub', 'https://github.com/Gero1999')
 txt2('ORCID', 'https://orcid.org/my-orcid?orcid=0000-0003-1413-0060')
+txt2('Science blog', 'https://www.blogger.com/blog/posts/5426686777123167554')
 txt2('Email', 'gerardo.jrac@gmail.com')
 
 
