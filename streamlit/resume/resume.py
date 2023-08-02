@@ -199,7 +199,7 @@ st.markdown('''
 txt2('LinkedIn', 'https://www.linkedin.com/in/gerardo-ra/?locale=en_US')
 txt2('GitHub', 'https://github.com/Gero1999')
 txt2('ORCID', 'https://orcid.org/my-orcid?orcid=0000-0003-1413-0060')
-txt2('Science blog', 'https://www.blogger.com/blog/posts/5426686777123167554')
+txt2('Science blog', 'https://science-against-science.blogspot.com/')
 txt2('Email', 'gerardo.jrac@gmail.com')
 
 
