@@ -3,7 +3,7 @@
 <br />
 <div align="center">
   <a href="https://github.com/Gero1999/code/new/main/shinyR/pairwise_alignment">
-    <img src="poker_logo.png" alt="Logo" width="120" height="80">
+    <img src="poker_logo.png" alt="Logo" width="140" height="80">
   </a>
 
   <h3 align="center">Texas Cheater</h3>
