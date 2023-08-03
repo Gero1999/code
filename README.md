@@ -8,7 +8,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 ##### Sequence Analysis
 
 * [HMM profiler](Python/HMM_profile_analyser). There are two parts. The profiler, which deduces the state-transition and emission matrices. And the decoder, which guess the most probable sequence. 
-* [Nussinov algorithm]. Based on a RNA sequence, it predicts the folding and structure of the molecule based on merely dynamic programming.
+* [Nussinov algorithm](). Based on a RNA sequence, it predicts the folding and structure of the molecule based on merely dynamic programming.
 * [FASTA extractor](Python/manipulation_FASTA/extract%26find_FASTA). A very simple code to extract, organize and posteriously search information from a FASTA file.
 
 ##### Streamlit Apps
