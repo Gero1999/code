@@ -13,7 +13,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [Prot-Profiler](streamlit/prot-profiler-app). Based on a set of protein sequences it produces a HMM-profile
 * [Resume](streamlit/resume). My professional portfolio detailing my experience, availability and different contributions
 
-### R 🇷
+### R-programming 🇷
 ##### Omics
 
 * [DEA (Differential Expression Analysis)](R/DEA). Automatized search, cleaning, quality control and analysis of BioStudies reports of a topic (In Progress)
