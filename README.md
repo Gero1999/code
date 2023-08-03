@@ -1,17 +1,22 @@
-# Personal Learning
+# Projects Resume
 
 Welcome to my code repository! Here, you'll find a collection of projects and learning materials I've developed
+
+---
 
 ### Python 🐍
 ##### Sequence Analysis
 
-* [HMM profiler](Python/HMM_profile_analyser)
-* [FASTA extractor](Python/manipulation_FASTA/extract%26find_FASTA)
+* [HMM profiler](Python/HMM_profile_analyser). There are two parts. The profiler, which deduces the state-transition and emission matrices. And the decoder, which guess the most probable sequence. 
+* [Nussinov algorithm]. Based on a RNA sequence, it predicts the folding and structure of the molecule based on merely dynamic programming.
+* [FASTA extractor](Python/manipulation_FASTA/extract%26find_FASTA). A very simple code to extract, organize and posteriously search information from a FASTA file.
 
 ##### Streamlit Apps
 * [Clone trigger](streamlit/close_trigger). Given a DNA reference sequence and a DNA intended to be clone it suggests top 20 list of forward and reverse primers that can be used as well as the restriction enzymes. 
 * [Prot-Profiler](streamlit/prot-profiler-app). Based on a set of protein sequences it produces a HMM-profile
 * [Resume](streamlit/resume). My professional portfolio detailing my experience, availability and different contributions
+
+---
 
 ### R-programming 🇷
 ##### Omics
@@ -27,6 +32,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [Texas Cheater](shinyR/texas-cheater) A Texas Poker simulator capable to predict your probabilities to win a game based on your game circumstances.
 * [Pairwise Alignment](shinyR/pairwise_alignment). Assess the alignemnt of two sequences thorugh dinamyc programming (Watermann algorithm).
 
+---
 
 ### Bash 💻
 ##### Omics
