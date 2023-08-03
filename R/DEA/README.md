@@ -25,7 +25,6 @@
   <p align="center">
     Analyze multiple datasets without even sweating!
     <br />
-    <a href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
     <br />
     <br />
     <a href="https://github.com/Gero1999/code/tree/main/R/DEA">View Demo</a>
