@@ -1,0 +1,210 @@
+---
+title: "proteins"
+author: "Gerardo José Rodríguez"
+date: "2022-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Biostrings)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+```
+---
+title: "proteins"
+author: "Gerardo José Rodríguez"
+date: "2022-10-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(Biostrings)
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+```
+
+## R Markdown
+Lets consider a native sequence and make a mutagenesis library. For that we will need a random-substitution function.
+
+```{r}
+# Define the initial sequence
+nat =  DNAString("ATGGGTAACATCTAA")
+
+# Alternatively read it from a FASTA file
+#nat = readDNAStringSet('native_DNA.fa')[[1]]
+
+# Define a substitution function
+make_substitution = function(seq, site=FALSE, nucl=FALSE){
+  if (site==FALSE){site=sample(c(1:nchar(seq)),1)}
+  if (nucl==FALSE){nucl=sample(c('A','C','G','T'),1)}
+  c(seq=replaceLetterAt(seq, at=site, nucl),
+    mut=c(paste0(site, nat[site],'>',nucl)))}
+
+# Perform the function over a set of your original sequence
+set = rep(DNAStringSet(nat),1000)
+set = lapply(set, \(dna) make_substitution(dna)$seq)
+```
+
+### Determine frequency at each position of each nucleotide
+
+```{r}
+cm_dna = consensusMatrix(DNAStringSet(set))[DNA_BASES,]
+cm_dna
+```
+
+
+### Determine frequency at each position of each residue
+```{r}
+# Translate your DNA set to a protein set
+prot_set = AAStringSet(lapply(DNAStringSet(set), \(x) translate(x)))
+
+resFreqPerPos = function(prot_set){
+  # Build a count matrix
+  cm_res = consensusMatrix(AAStringSet(prot_set))
+  # Determine which AA are not represented to complete the table content with 0s
+  AAtoAdd = setdiff(AA_ALPHABET, rownames(cm_res))
+  rbind(cm_res, matrix(0, nrow=length(AAtoAdd), ncol=ncol(cm_res),
+                       dimnames=list(AAtoAdd, 1:ncol(cm_res))))
+}
+resFreqPerPos(prot_set)
+```
+
+# Determine each residue-pair substitution frequence
+```{r}
+# I CREATED TWO POTENTIAL FUNCTIONS. THE SECOND ONE IS ALMOST 5x FASTER, BUT DO NOT CREATE STANDARD TABLES (ONLY NECESSARY AMINOACIDS WITH AT LEAST ONE COUNT)
+nat_prot = translate(nat)
+
+subMtx = function(prot_set, nat_prot){
+  # Create a count pair-matrix
+  sub_mtx = matrix(0, nrow=length(AA_ALPHABET), ncol=length(AA_ALPHABET),
+                   dimnames=list(AA_ALPHABET, AA_ALPHABET))
+  # Find the residue-pairs in the substitutions and summarize them in a table
+  pairs = table(unlist(sapply(prot_set, function(prot){
+    pos = which(as.integer(nat_prot)!=as.integer(prot), useNames = T)
+    paste0(as.vector(nat_prot[pos]), as.vector(prot[pos]))
+  })))
+  # Fill the matrix values with the correspondant counts for each pair
+  for (p in 1:length(pairs)){
+    sub_mtx[substr(names(pairs)[p],1,1), substr(names(pairs)[p],2,2)] = pairs[p]
+  }
+  sub_mtx
+}
+
+subMtx2 = function(prot_set, nat_prot=NULL){
+  
+  # Create a consensus protein (in case is not given)
+  if (is.null(nat_prot)){nat_prot=consensusString(prot_set)}
+  
+  # Align sequences and find all mismatches. Reshape the object in a mtx
+  prot_set_aligned = pairwiseAlignment(prot_set, nat_prot) 
+  sub_mtx = mismatchSummary(prot_set_aligned)$subject %>%
+    group_by(Subject, Pattern) %>%
+    summarize(Count=sum(Count)) %>%
+    xtabs(data=., formula=Count~Subject+Pattern)
+    AAtoAdd_row = setdiff(AA_ALPHABET, rownames(sub_mtx))
+    AAtoAdd_col = setdiff(AA_ALPHABET, colnames(sub_mtx))
+    sub_mtx[AAtoAdd_row,] = 0
+    sub_mtx[AAtoAdd_row,] = 0
+    rbind(sub_mtx, matrix(0, nrow=length(AAtoAdd), ncol=ncol(sub_mtx),
+                       dimnames=list(AAtoAdd, 1:ncol(sub_mtx))))
+  }
+
+dim(subMtx(prot_set, nat_prot))
+dim(subMtx2(prot_set, nat_prot))
+```
+
+## Make some relevant plots of the results
+```{r}
+library(pheatmap)
+# Heatmap of pair-substitution frequence
+heatmap(subMtx2(prot_set, nat_prot)[AA_STANDARD, AA_STANDARD], 
+        Rowv = NA, Colv = NA)
+
+pheatmap(subMtx2(prot_set, nat_prot)[AA_STANDARD, AA_STANDARD])
+
+# Heatmap of residue presence per position
+heatmap(resFreqPerPos(prot_set),
+        Rowv = NA, Colv = NA)
+```
+
+
+
+Now we would like to extract some information from these sequences. Let's see if we can create a function identyfying the mismatches between two sequences
+
+```{r}
+# Function where you introduce 
+find_subs_dna = function(dna1, dna2, do_align=FALSE){
+  positions = which(!as.integer(dna1)==as.integer(dna2))
+  sapply(positions, \(pos) paste0(pos, dna1[pos], '>', dna2[pos]))
+}
+# Apply through all the sequences
+unlist(sapply(set, \(dna) find_subs_dna(nat, dna)))
+```
+
+
+
+# ALL FUNCTIONS
+## In case you want to use them without analyzing them one by one
+```{r}
+make_substitution = function(seq, site=FALSE, nucl=FALSE){
+  if (site==FALSE){site=sample(c(1:nchar(seq)),1)}
+  if (nucl==FALSE){nucl=sample(c('A','C','G','T'),1)}
+  c(seq=replaceLetterAt(seq, at=site, nucl),
+    mut=c(paste0(site, nat[site],'>',nucl)))}
+
+freq_mtx = function(setSeqs, natProt=NULL, justSubs=F, as.prob=T){
+  # Determine if there is a DNA or protein set
+  if(class(setSeqs)=='AAStringSet'){alphabet=AA_ALPHABET}
+  else if(class(setSeqs)=='DNAStringSet'){alphabet=DNA_ALPHABET}
+  else{return(print('Introduce a Biostrings AAStringSet/DNAStringSet'))}
+  
+  # Determine residue's frequence at each position
+  freq_mtx = as.matrix(setSeqs) %>% 
+  as.data.frame() %>%
+  apply(., 2, function(col){
+  table(c(col, alphabet))-1}) 
+  
+  # Name columns as sequence-position + letter (if native seq is specified)
+  if (is.null(natProt)){colnames(freq_mtx) = 1:ncol(freq_mtx)}
+  else {colnames(freq_mtx) = paste0(1:nchar(natProt), as.vector(natProt))}
+  
+  # Keep or not the equal subs
+  if (!is.null(natProt) && justSubs==T){
+    for (l in 1:nchar(natProt)){freq_mtx[as.character(as.vector(natProt)[l]),l] =0 }
+  }
+  # Return the output
+  if (as.prob==T) {return(freq_mtx/sum(freq_mtx))}
+  else{return(freq_mtx)}
+}  
+
+sub_mtx = function(setSeqs, wildSeq, justSubs=F){
+    # Determine if there is a DNA or protein set
+  if(class(setSeqs)=='AAStringSet'){alphabet=AA_ALPHABET}
+  else if(class(setSeqs)=='DNAStringSet'){alphabet=DNA_ALPHABET}
+  else{return(print('Introduce a Biostrings AAStringSet/DNAStringSet'))}
+  
+  # Determine residue's frequence at each position
+  freq_mtx = as.matrix(setSeqs) %>% 
+  as.data.frame() %>%
+  apply(., 2, function(col){
+  table(c(col, alphabet))-1}) 
+
+  # Group columns that share the same letter in the native sequence
+  colnames(freq_mtx) = as.vector(wildSeq)
+  sub_mtx = t(rowsum(t(freq_mtx), group=colnames(freq_mtx)))  # Returns sub_mtx
+  
+  # If just substitutions are of interest discard the concordances
+  if (justSubs){for (l in colnames(sub_mtx)){sub_mtx[l,l] = 0 }}
+  
+  # Add lacking aminoaciads in columns
+  LettersToAdd = setdiff(rownames(sub_mtx), colnames(sub_mtx))
+  cbind(sub_mtx, matrix(0, nrow=nrow(sub_mtx), ncol=length(LettersToAdd),
+                       dimnames=list(rownames(sub_mtx),
+                                     LettersToAdd)))
+}  
+```
+
