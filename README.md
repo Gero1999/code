@@ -8,7 +8,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 ##### Sequence Analysis
 
 * [HMM profiler](Python/HMM_profile_analyser). There are two parts. The profiler, which deduces the state-transition and emission matrices. And the decoder, which guess the most probable sequence. 
-* [Nussinov algorithm](). Based on a RNA sequence, it predicts the folding and structure of the molecule based on merely dynamic programming.
+* [Nussinov algorithm](Nussinov). Based on a RNA sequence, it predicts the folding and structure of the molecule based on merely dynamic programming.
 * [FASTA extractor](Python/manipulation_FASTA/extract%26find_FASTA). A very simple code to extract, organize and posteriously search information from a FASTA file.
 
 ##### Streamlit Apps
@@ -25,7 +25,8 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [postGWAS comparison]() Cleaning and standarization of multiple summary statistics as well as a genetic correlation and pathway analysis contrast (In Progress)
 * [GWAS-Cat download](). Download, cleaning and standarization of multiple GWAS-Catalog summary statistics based on a search pattern and a LD reference panel.
 * [LD-neighbor algorithm](). Based on a PLINK reference panel and a list of reference alleles, it identifies potential substitutes of these for each summary statistics integrated.
-* [Mendelian Randomization]() Automatized causal analyses of pairwise phenotype comparisons based on summary statistics performing IVW, Egger and Weighted Median. Includes quality plots. 
+* [Mendelian Randomization]() Automatized causal analyses of pairwise phenotype comparisons based on summary statistics performing IVW, Egger and Weighted Median. Includes quality plots.
+* [Protein Variant Analysis](Protein-Variant-Analysis). Analysis and study figures that can be performed over a set of translated DNA coding sequences. 
 
 ##### Shiny Apps
 
