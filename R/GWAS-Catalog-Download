@@ -1,0 +1,75 @@
+<div id="top"></div>
+<!--
+
+
+
+-->
+[![Contributors][contributors-shield]][contributors-url]
+[![Forks][forks-shield]][forks-url]
+[![Stargazers][stars-shield]][stars-url]
+[![Issues][issues-shield]][issues-url]
+[![MIT License][license-shield]][license-url]
+[![LinkedIn][linkedin-shield]][linkedin-url]
+
+
+
+<!-- PROJECT LOGO -->
+<br />
+<div align="center">
+  <a href="https://github.com/Gero1999/code/new/main/R/DEA">
+    <img src="files.png" alt="Logo" width="80" height="80">
+  </a>
+
+  <h3 align="center">Summary Statistics download script for GWAS Catalog</h3>
+
+  <p align="center">
+    Find the summary statistics and catch them all!
+    <br />
+    <a href="https://github.com/othneildrew/Best-README-Template"><strong>Explore the docs »</strong></a>
+    <br />
+    <br />
+    <a href="https://github.com/Gero1999/code/tree/main/R/GWAS-Catalog-Download">View Demo</a>
+    ·
+  </p>
+</div>
+
+
+
+<!-- ABOUT THE PROJECT -->
+## About The Project
+
+
+The aim of this script is to provide a simple interface to perform a simple download of summary statistics:
+
+* Selecting the phenotype, ancestry and sample size of interest
+* Collecting all complementary metadata information
+* Automatically identifying and standarizing the format of the data to a common type 
+
+
+### Built With R
+
+* [Vroom]()
+* [Dplyr]()
+* [Tidyverse]()
+* [Openxlsx]()
+* [Data.table]()
+* [Tidyr]()
+* [ggplot2]()
+
+
+
+<p align="right">(<a href="#top">back to top</a>)</p>
+
+
+
+<!-- STILL IN DEVELOP! -->
+
+
+
+
+<!-- USAGE EXAMPLES -->
+## Still in develop!
+
+
+
+
