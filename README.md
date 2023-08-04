@@ -19,13 +19,16 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 ---
 
 ### R-programming 🇷
-##### Omics
-
-* [DEA (Differential Expression Analysis)](R/DEA). Automatized search, cleaning, quality control and analysis of BioStudies reports of a topic (In Progress)
+##### Genomics
 * [postGWAS comparison]() Cleaning and standarization of multiple summary statistics as well as a genetic correlation and pathway analysis contrast (In Progress)
 * [GWAS-Cat download](). Download, cleaning and standarization of multiple GWAS-Catalog summary statistics based on a search pattern and a LD reference panel.
-* [LD-neighbor algorithm](). Based on a PLINK reference panel and a list of reference alleles, it identifies potential substitutes of these for each summary statistics integrated.
 * [Mendelian Randomization]() Automatized causal analyses of pairwise phenotype comparisons based on summary statistics performing IVW, Egger and Weighted Median. Includes quality plots.
+
+##### Transcriptomics
+* [DEA (Differential Expression Analysis)](R/DEA). Automatized search, cleaning, quality control and analysis of BioStudies reports of a topic (In Progress)
+* [LD-neighbor algorithm](). Based on a PLINK reference panel and a list of reference alleles, it identifies potential substitutes of these for each summary statistics integrated.
+
+##### Proteomics
 * [Protein Variant Analysis](Protein-Variant-Analysis). Analysis and study figures that can be performed over a set of translated DNA coding sequences. 
 
 ##### Shiny Apps
