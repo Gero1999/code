@@ -63,7 +63,7 @@ The aim of this project is to download summary statistics from GWAS Catalog:
 
 
 <!-- USAGE EXAMPLES -->
-## Still in develop!
+
 
 
 
