@@ -1,0 +1,235 @@
+---
+title: "GWAS-Cat download"
+author: "Gerardo José Rodríguez"
+date: "2023-08-03"
+output: html_document
+---
+
+# Install neccesary libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("vroom")
+library("tidyverse")
+library('dplyr')
+library('openxlsx')
+library('data.table')
+library('tidyr')
+```
+
+
+# Identify the GWAS Catalog Summary data of interest
+
+## Define your variables for the search
+Including a search-term for the phenotypes you want to include, the genetic ancestries/populations and the sample size limitations. Also remember to determine how many phenotype duplicates you are interested in having.
+```{r}
+phenotype_regex = '.*[Cc]ancer$'
+min_sample_size = 100
+populations = c("European", "British", "Finish", "German")
+nr_studies_per_phenotype = 2
+output_dir = 'data/initial_data'
+```
+
+
+## Load the data info from the server
+```{r}
+# Delete previous older files of the gwas catalog if they exist
+sapply(list.files(pattern='gwas_catalog'), \(x) unlink(x))
+
+# Download all the GWAS Catalog data information (3-5 min)
+options(timeout = 1000)
+gwcat = vroom('saved_objects/gwas_catalog_data.2023-03-24.tsv.gz')
+
+# Keep only unique data accessions 
+gwcat = gwcat %>% filter(!duplicated(`STUDY ACCESSION`))
+
+gsub('[a-zA-Z,.]','',gwcat$`INITIAL SAMPLE SIZE`) %>% 
+  str_extract('([0-9]+)') %>% as.numeric()
+```
+
+
+## Identify and keep only files with public Summary Statistics
+```{r}
+# Get all GCST-codes with SS files available in GWAS-Catalog
+links_all <-rvest::read_html( "http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/") %>% 
+   html_nodes("a") %>%
+   html_attr("href") %>% 
+   grep('^GCST.*', .,value=T)
+
+# Keep only GCST-accessions with available summary statistics 
+studies_withSS = c()
+for (link in links_all){
+  studies_withSS = c(studies_withSS, 
+                  rvest::read_html(paste0("http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/", link))%>% 
+   html_nodes("a") %>%
+   html_attr("href") %>% 
+   grep('^GCST.*', .,value=T) %>% gsub('/','',.))
+}
+
+# Only keep those studies with available summary statistics to donwload
+# And only keep relevant information
+gwcat = filter(gwcat, `STUDY ACCESSION` %in% studies_withSS) 
+```
+
+
+## Create ancestry annotation and sample size annotation. Then filter
+```{r}
+# Define the columns of ancestry and sample size 
+gwcat$ancestry = sapply(str_extract_all(gwcat$`INITIAL SAMPLE SIZE`, '[A-Z][a-z]+'), 
+              \(x) paste0(sort(unique(x)),collapse=',')
+              )
+
+gwcat$sample_size = gsub('[a-zA-Z,.]','',gwcat$`INITIAL SAMPLE SIZE`) %>% 
+  str_extract('([0-9]+)') %>% as.numeric()
+
+
+# Filter rows to select the phenotype of interest, sample size and ancestry
+gwcat = gwcat %>% 
+  filter(grepl(phenotype_regex,gwcat$`DISEASE/TRAIT`),
+         ancestry %in% populations, 
+         sample_size > min_sample_size) %>%
+  group_by(`DISEASE/TRAIT`) %>% 
+  top_n(nr_studies_per_phenotype, wt=sample_size) %>%
+  select(sample_size, ancestry, `DISEASE/TRAIT`, PUBMEDID, DATE, LINK, STUDY, 
+         `FIRST AUTHOR`, `INITIAL SAMPLE SIZE`, `PLATFORM [SNPS PASSING QC]`) 
+```
+
+
+
+# Download the GWAS Catalog Summary Statistics on your output directory
+
+## Make sure the output directory exists
+```{r}
+dir.create(output_dir, recursive = T)
+```
+
+## Define functions that you will need
+```{r}
+find.URL.files = function(url){
+  rvest::read_html(url) %>% 
+    html_nodes("a") %>%
+    html_attr("href") %>%
+    grep('^\\?.*',.,value=T, invert=T) %>%
+    paste0(url,.) %>%
+    .[-1]
+}
+
+# To identify the relevant columns (SNP, EA, CHR, BP, BETA, SE, P)
+identify_SS_cols = function(df, as.index=F){
+
+  # Get a subset of random rows to make calculus faster
+  random_rows = df[sample(nrow(df), 20),]
+ 
+  # Identify the relevant columns
+  snp_col = names(df)[sapply(random_rows, is.character) & 
+                      sapply(random_rows, \(col) any(startsWith(as.character(col), 'rs')))]
+  
+  p_col = names(df)[sapply(random_rows, \(col){min(col)>=0 & min(col)<1 & max(col)<=1 & 
+      all(!is.na(as.numeric(col)))}) &
+                      grepl('P.*',toupper(names(random_rows)))]
+
+  bp_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=1 &
+                       sapply(random_rows,  \(col){max(as.numeric(col))})>1000 &
+                       sapply(random_rows, \(col){all(!is.na(as.numeric(col)))}) &
+                       grepl('^[BP]', toupper(names(df)))]
+
+  ea_col = names(df)[sapply(random_rows, \(col){any(toupper(col) %in% c('A','C','G','T'))}) & 
+                       grepl('^(EA$)|^(EFFECT_ALLELE)|^(ALLELE1)|^(A1)|^(E)|^(ALT)',
+                             toupper(names(df)))][1]
+
+  se_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=0 &
+                    sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) & 
+                    !grepl('^(STAT)',toupper(names(random_rows))) &
+                    grepl('^(SE)|^(STDERR)|^(EUR_SE)|^(ST)',toupper(names(random_rows)))][1]
+
+  chr_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=1 & 
+                    sapply(random_rows, \(col){max(as.numeric(col))})<=23 &
+                    sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) &
+                    startsWith(toupper(names(random_rows)), 'CH')]
+
+  beta_col = names(df)[sapply(random_rows, \(col){any(col<0)}) &
+                       sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) & 
+                       grepl('.*[(B)(EFFECT)(OR)].*',toupper(names(random_rows)))]
+
+  
+  # Reset the new dataset format 
+  if (as.index==F){
+  return(setNames(object = c(snp_col[1], ea_col[1], chr_col[1], bp_col[1], p_col[1], beta_col[1], se_col[1]),
+                  nm = c('SNP','EA','CHR','BP','P','BETA','SE')))}
+  else{
+    indices = match(c(snp_col[1], ea_col[1], chr_col[1], bp_col[1], p_col[1], beta_col[1], se_col[1]), colnames(df))
+    return(setNames(object = indices, nm = c('SNP','EA','CHR','BP','P','BETA','SE')))
+    }
+}
+```
+
+
+## Download the summary statistics 
+```{r}
+# This is just an object that simplifies the search
+links0df = data.frame(minGCST=as.numeric(gsub('GCST0*([0-9]*)-GCST.*','\\1',links_all)),
+                      maxGCST=as.numeric(gsub('GCST.*-GCST0*([0-9]*)/','\\1',links_all)))
+
+# GCST Number
+GCST_nr = as.numeric(str_extract(GCST, '[1-9][0-9]+'))
+
+# This is the main loop iteration to download each data
+for (GCST in gwcat$`STUDY ACCESSION`[1:3]){
+  # Decipher the folder URL where the data is contained
+  link0 = links_all[links0df$minGCST<=GCST_nr & links0df$maxGCST>=GCST_nr]
+  url = paste0('http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/', link0, GCST, '/')
+  
+  # Get a list of all the folder and subfolder files
+  url_files = find.URL.files(url)
+  for (dir in grep('.*/$', url_files, value=T)){
+    url_files = c(url_files[!url_files==dir], find.URL.files(dir))
+  }
+  
+  # Keep only txt/tsv/gz files. If there are not, skip the dataset 
+  url_files = grep('.*\\.[gztsvtxtzip]*$', url_files, value=T)
+  if (length(url_files)==0){next}
+  
+  # Keep the Summary Statistics file (the file with the biggest size)
+  url_files_sizes = sapply(url_files, \(x) as.numeric(httr::HEAD(x)$headers$`content-length`)) %>% unlist()
+  
+  # Try to download the data and make sure the format seems to be the expected
+  for (file_url in names(sort(url_files_sizes,T))){
+    if (endsWith(file_url,'zip')){
+      download.file(file_url, basename(file_url))
+      ss_file_url = basename(file_url)
+      test_df = try(vroom(basename(file_url), n_max=50, show_col_types = F))
+    }
+    else{test_df = try(vroom(file_url, n_max = 50))
+    }
+    if (any(class(test_df) %in% c("spec_tbl_df","tbl_df","tbl","data.frame"))){
+      ss_file_url = file_url
+      break}
+  }
+
+  # Partially load the file, decide the column names
+  col_names = suppressWarnings(identify_SS_cols(test_df))
+  if (any(is.na(col_names[c('SNP','EA','P','BETA','SE')]))){
+    test_df = vroom(ss_file_url, show_col_types = F)
+    col_names = identify_SS_cols(test_df, as.index = F)
+    
+    if (any(is.na(col_names[c('SNP','EA','P','BETA','SE')]))){
+      next # If it lacks essential data just forget about it
+      }
+  }
+  
+  # Load only neccessary columns 
+  df = vroom(ss_file_url, col_select = unname(col_names[c('SNP', 'EA', 'P', 'BETA', 'SE')]), 
+             col_type=c('c','c','n','n','n')) %>%
+    `colnames<-`(c('SNP', 'EA', 'P', 'BETA', 'SE')) %>%
+    mutate(EA = toupper(EA),    # In case the effect allele is not in upper letter
+           SNP = gsub('(rs[0-9]*).*$','\\1',SNP))  # Elude potential rsid additions
+
+  
+  # Save the data in the output folder with the name of the access number and the phenotype
+  output_file_name = paste0(output_dir, '/',
+                            filter(gwcat, `STUDY ACCESSION`==GCST) %>% 
+                              pull(`DISEASE/TRAIT`),'_', GCST, '.txt.gz')
+  fwrite(df, output_file_name, quote=F, row.names=F)
+}
+```
+
+
