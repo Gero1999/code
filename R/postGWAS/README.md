@@ -35,7 +35,7 @@
 
 
 <!-- ABOUT THE PROJECT -->
-Welcome to the GWAS Summary Statistics Pipeline repository! This powerful pipeline allows you to perform essential operations on a set of Genome-Wide Association Study (GWAS) summary statistics. With this pipeline, you can gain deeper insights into your genetic data and discover potential biological implications.
+This a post GWAS Summary Statistics Pipeline repository! This repository is intended to perform essential operations on a set of Genome-Wide Association Study (GWAS) summary statistics. With this pipeline, you can gain deeper insights into your genetic data and discover potential biological implications.
 
 * **QQ-plots and Histograms**. The pipeline generates QQ-plots and histograms to visualize the distribution of test p-values from your GWAS summary statistics. These plots help you assess the presence of significant associations and potential deviations from expected null distributions.
 
