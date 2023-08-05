@@ -17,7 +17,7 @@
 <br />
 <div align="center">
   <a href="https://www.google.com/url?sa=i&url=https%3A%2F%2Fcommons.wikimedia.org%2Fwiki%2FFile%3ADirected_acylic_graph_for_Mendelian_randomization_Wikipedia_page.png&psig=AOvVaw2Od-Uu0nqUjijyS2WMScHC&ust=1691318740254000&source=images&cd=vfe&opi=89978449&ved=0CBMQjhxqFwoTCNip9MOrxYADFQAAAAAdAAAAABAE">
-    <img src="mr_dag.png" alt="Logo" width="120" height="80">
+    <img src="mr_dag.png" alt="Logo" width="150" height="100">
   </a>
 
   <h3 align="center">Mendelian Randomization</h3>
