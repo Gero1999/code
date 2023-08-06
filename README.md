@@ -40,4 +40,4 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 
 ### Bash 💻
 ##### Omics
-* [Pairwise genetic correlations](). Using AWK language performs the genetic correlation via [LDSC](https://github.com/bulik/ldsc) program and builds a matrix object in a txt file  
+* [Pairwise genetic correlations](). Using AWK language performs the genetic correlation via [LDSC](https://github.com/bulik/ldsc) program and builds a matrix object 
