@@ -46,6 +46,7 @@ The purpose of this project is to be capable of automatizing pipeline processes 
 * Evaluate how these changes affect the desired function to study
 
 ## About Protein Variant Analysis
+
 This project aims to comprehensively analyze the impact of genetic mutations on protein sequences. By simulating a set of DNA sequences with mutations, we investigate how these changes affect the translated proteins and explore the frequency of variations in specific residues. Our pipeline incorporates various tools and algorithms to facilitate a thorough examination of protein variants and their potential implications.
 
 The pipeline is designed to handle large-scale simulations of DNA sequences with mutations, allowing for comprehensive analysis of protein variants. It performs variant annotation, protein translation, and functional prediction using state-of-the-art bioinformatics tools and databases. The pipeline also includes options for visualizing the protein structures and analyzing the potential impact on secondary and tertiary structures.
