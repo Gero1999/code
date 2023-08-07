@@ -39,6 +39,18 @@ The files you can find in this repository are:
 <br/>
 
 
+## What is a HMM-profile?
+
+
+A Hidden Markov Model (HMM) profile for protein sequences is a probabilistic model used in bioinformatics to represent conserved patterns and domains within a protein family. It is a type of sequence profile that captures both the positional information and the variability of amino acids at different positions in the protein sequence.The HMM profile is based on the concept of a "hidden" state, which represents the unknown functional region or domain of the protein. The model contains two main components:
+
+* Emission Probabilities. These probabilities describe the likelihood of observing a particular amino acid at each position in the protein sequence. They are derived from a multiple sequence alignment of homologous proteins belonging to the same family. The alignment identifies conserved residues and patterns that are characteristic of the protein family.
+
+* Transition Probabilities. These probabilities govern the likelihood of transitioning from one state to another along the protein sequence. The transitions correspond to moving from one position to the next within the conserved domain.
+
+HMM profiles are widely used in various bioinformatics applications, including protein domain annotation, functional prediction, and sequence database searching. When applied to search a protein database, the HMM profile can efficiently identify homologous sequences and classify them into the respective protein family based on the similarity to the conserved domain. The power of HMM profiles lies in their ability to capture both local and global sequence information, making them highly effective in identifying remote homologs that may share low sequence similarity but have conserved functional regions. They provide a more sensitive and accurate method for protein sequence analysis compared to traditional sequence similarity searches based on fixed sequence motifs or pairwise alignments.
+
+
 ### Built With
 
 * [Pandas]()
