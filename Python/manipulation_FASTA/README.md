@@ -25,7 +25,7 @@
 
 ## About The Project
 
-This is __the very first bioinformatics code I wrote__ involving bioinformatics when I started learning Python (by 2019). That is why I still keep it here as a nice remind of how much I evolved (and I still can). 
+This is __the very first bioinformatics code I wrote__ when I started learning Python (by 2019). That is why I still keep it here as a nice remind of how much I evolved (and I still can). 
 Overall, this collection of functions provides a simple yet effective way to read and manipulate FASTA files, allowing for easy retrieval of protein sequences and enabling searches based on regular expressions for more flexible data analysis. These functions are valuable tools for any bioinformatician or biologist working with protein sequences in the context of computational analysis and research.
 
 The aim of this project is to download summary statistics from GWAS Catalog:
