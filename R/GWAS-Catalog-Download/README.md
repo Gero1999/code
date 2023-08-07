@@ -63,7 +63,7 @@ The code provides simplicity and automatization to researchers and data analysts
 
 * [Vroom]()
 * [Data.table]()
-* [Dplyr()
+* [Dplyr]()
 * [Openxlsx]()
 * [Tidyr]()
 
