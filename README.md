@@ -12,7 +12,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [FASTA extractor](Python/manipulation_FASTA). A very simple code to extract, organize and posteriously search information from a FASTA file.
 
 ##### Streamlit Apps
-* [Clone trigger](streamlit/close_trigger). Given a DNA reference sequence and a DNA intended to be clone it suggests top 20 list of forward and reverse primers that can be used as well as the restriction enzymes. 
+* [Clone trigger](streamlit/clone_trigger). Given a DNA reference sequence and a DNA intended to be clone it suggests top 20 list of forward and reverse primers that can be used as well as the restriction enzymes. 
 * [Prot-Profiler](streamlit/prot-profiler-app). Based on a set of protein sequences it produces a HMM-profile
 * [Resume](streamlit/resume). My professional portfolio detailing my experience, availability and different contributions
 
@@ -22,7 +22,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 ##### Genomics
 * [postGWAS comparison](R/postGWAS) Cleaning and standarization of multiple summary statistics as well as a genetic correlation and pathway analysis contrast (In Progress)
 * [GWAS-Catalog download](R/GWAS-Catalog-Download). Download, cleaning and standarization of multiple GWAS-Catalog summary statistics based on a search pattern and a LD reference panel.
-* [Mendelian Randomization]() Automatized causal analyses of pairwise phenotype comparisons based on summary statistics performing IVW, Egger and Weighted Median. Includes quality plots.
+* [Mendelian Randomization](R/Mendelian_Randomization) Automatized causal analyses of pairwise phenotype comparisons based on summary statistics performing IVW, Egger and Weighted Median. Includes quality plots.
 
 ##### Transcriptomics
 * [DEA (Differential Expression Analysis)](R/DEA). Automatized search, cleaning, quality control and analysis of BioStudies reports of a topic (In Progress)
