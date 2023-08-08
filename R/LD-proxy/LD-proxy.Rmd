@@ -1,0 +1,71 @@
+---
+title: "LD-proxy"
+author: "Gerardo José Rodríguez"
+date: "2023-08-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(snpStats)
+```
+
+
+## Set your input variables
+```{r}
+# Determine what are the SNPs that you are interested to search in the datasets
+SNPs.ref = c('rs3131962', 'rs2927718', 'rs183027878', 'rs76867316', 'rs3763196',
+               'rs3858666', 'rs17158406', 'rs74758431', 'rs55957521', 'rs16882975')
+  
+# Define the dataset from where you want to obtain it
+input_data = vroom('data/initial_data/Systolic blood pressure_GCST90000062.txt.gz')
+```
+
+
+## Read the PLINK files with genome info
+```{r}
+geno_panel = snpStats::read.plink(bed = 'data/genotype_reference/1kg.v3/EUR.bed', 
+                                  bim = 'data/genotype_reference/1kg.v3/EUR.bim', 
+                                  fam = 'data/genotype_reference/1kg.v3/EUR.fam')
+
+```
+
+## Make a clever object from your list of desired input SNPs to study
+
+```{r}
+# Return all sorted LD correlation measures of a SNP in a reference panel
+build_LD_proxy_list = function(SNPref, plink_panel, window_kb=500, LD_measure='R'){
+
+# Get the genomic location
+gloc = geno_panel$map %>% filter(snp.name==SNPref) %>%
+  dplyr::select(chromosome, position) %>% as.vector()
+
+# Find closest SNPs (exclude reference)
+SNPs = plink_panel$map %>% 
+  filter(chromosome==gloc$chromosome) %>%
+  filter(abs(position-gloc$position)<(window_kb*1000/2)) %>%
+  filter(!snp.name==SNPref) %>%
+  pull(snp.name)
+
+# Identify their correlations, sort them (in absolute value) and return the vector
+ldcorr = snpStats::ld(plink_panel$genotypes[,SNPref], 
+             plink_panel$genotypes[,SNPs], 
+             stats=LD_measure) 
+ldcorr = setNames(as.vector(ldcorr), colnames(ldcorr))
+return(ldcorr[order(abs(ldcorr), decreasing = T)])
+}
+
+listLD_leadSNPs = lapply(SNPs.ref, 
+                         function(snp){build_LD_proxy_list(snp, geno_panel, 
+                                                           5000, LD_measure = 'R')})
+
+```
+
+
+
+## Perform a search of potential SNPs to substute with proxy SNPs
+
+```{r}
+
+```
+
