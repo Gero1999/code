@@ -1,0 +1,240 @@
+---
+title: "post GWAS Comparison"
+author: "Gerardo José Rodríguez"
+date: "2023-02-02"
+output: html_document
+---
+## Libraries
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library("fs")
+library("vroom")
+library("tidyverse")
+library('dplyr')
+library('biomaRt')
+library('openxlsx')
+library('data.table')
+library('tidyr')
+library('pheatmap')
+library('ggrepel')
+library("VennDiagram")
+library("UpSetR")
+```
+
+## Input indications
+Apart from indicating the input directory (relative to this script's location) where all your summary files are located, specify the output directory (relative to this script's location) where all your results will be stored. Indicate as well a level of significance (alfa) and an excel-table that presents the next columns
+in relation with your data: 1) File_name, 2) (File)Name for plots, 3) Group name with colname you desire to plot, 4) Sample size, 5) Annotation-1 ("Study design" for example), 6) Annotation-2 ("Cohort/sex" for example). There is a template that you can use to obtain the maximum from it  
+```{r}
+# Set variable values
+input_dir = 'data'
+output_dir = 'results'
+alfa = 5*10^(-9)
+
+# Indicate a metadata excel-table (read above this chunk)
+meta  = openxlsx::read.xlsx('metadata_new.xlsx')
+file_paths  = list.files(input_dir, pattern = '*', full.names = T)
+
+# Make comprobations that the files and filenames 
+ifelse(all(meta[,1] %in% basename(file_paths)), '', 'Files names are not in meta correctly introduced or input was wrongly introduced')
+
+meta = data.frame(Filename=c('Diastolic blood pressure_GCST90000059.txt.gz', 'Systolic blood pressure_GCST90000062.txt.gz'), Name=c('DBP', 'SBP'), Group_name = c('DBP','SBP'), Annot1=c('DBP','SBP'), Sex=c('both','both'))
+```
+
+
+## Index 
+# Index of Contents
+[ Step 1: Filtering and data-standarization ]  
+[ Step 2: Quality control ]  
+[ Task 3: Summary matrix ]  
+[ Task 4: Compare to the other GFP mutagenesis dataset ]   
+[ Task 5: integrating MAVE assays of stability and activity ]  
+[ Annex ]  
+
+<br />  
+
+
+## Define some neccesary functions
+<details><summary>Click here</summary>
+```{r}
+standarize_GWASss  <- function(file_path, meta=meta) {
+  df0 = vroom::vroom(file_path, na = c('-', ''))
+  colnames(df0) = toupper(colnames(df0))
+  
+  # Metadata information that needs to be included
+  file_name = meta[meta$Filename==basename(file_path),]$Name
+  sample_size = meta[meta$Filename==basename(file_path),]$N_ind
+  
+  if ('LOG10P' %in% colnames(df0)){df0$P = 10^(-df0$LOG10P)}
+  random_rows = df0[sample(1:nrow(df0), 50, F),] # Random subset that speed-up checking operations
+  
+    # Identify the relevant columns
+  snp_col = names(df)[sapply(random_rows, is.character) & 
+                      sapply(random_rows, \(col) any(startsWith(as.character(col), 'rs')))]
+  
+  p_col = names(df)[sapply(random_rows, \(col){min(col)>=0 & min(col)<1 & max(col)<=1 & 
+      all(!is.na(as.numeric(col)))}) &
+                      grepl('P.*',toupper(names(random_rows)))]
+
+  bp_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=1 &
+                       sapply(random_rows,  \(col){max(as.numeric(col))})>1000 &
+                       sapply(random_rows, \(col){all(!is.na(as.numeric(col)))}) &
+                       grepl('^[BP]', toupper(names(df)))]
+
+  ea_col = names(df)[sapply(random_rows, \(col){any(toupper(col) %in% c('A','C','G','T'))}) & 
+                       grepl('^(EA$)|^(EFFECT_ALLELE)|^(ALLELE1)|^(A1)|^(E)|^(ALT)',
+                             toupper(names(df)))][1]
+
+  se_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=0 &
+                    sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) & 
+                    !grepl('^(STAT)',toupper(names(random_rows))) &
+                    grepl('^(SE)|^(STDERR)|^(EUR_SE)|^(ST)',toupper(names(random_rows)))][1]
+
+  chr_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=1 & 
+                    sapply(random_rows, \(col){max(as.numeric(col))})<=23 &
+                    sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) &
+                    startsWith(toupper(names(random_rows)), 'CH')]
+
+  beta_col = names(df)[sapply(random_rows, \(col){any(col<0)}) &
+                       sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) & 
+                       grepl('.*[(B)(EFFECT)(OR)].*',toupper(names(random_rows)))]
+
+  #Compute Z score
+  if(all(c('BETA','SE') %in% colnames(df0))){df0$Z = round(as.numeric(df0$BETA)/as.numeric(df0$SE),3)}
+  df0$DATASET = file_name
+
+  # Make some standard format for the units and values of the columns
+  df0$SNP = ifelse(grepl('^rs', df0$SNP), df0$SNP, paste0(df0$CHR,':',df0$BP))
+  if (all(c('EA','NEA') %in% names(col_names))){
+    if (!df0[1,'EA']==toupper(df0[1,'EA'])){df0$EA = toupper(df0$EA)}
+    if (!df0[1,'NEA']==toupper(df0[1,'NEA'])){df0$NEA = toupper(df0$NEA)}
+    df0$UID = paste0(df0$SNP,':',df0$NEA,':',df0$EA)
+  }
+  
+  # Discard duplicated rows
+  print(paste0('Number of duplicated UIDs: ', sum(duplicated(df0$UID))))
+  return(df0[!duplicated(df0$UID),])
+}
+manhattan_plot <- function(df, title, Pmax=1, alpha=5*10^(-9), 
+                           chr_to_represent=c(1:15, seq(16,22,2))){
+
+  df = filter(df, P < Pmax) %>% 
+    arrange(CHR, BP) %>% 
+    mutate(pos = 1:nrow(.))
+  
+  plot_labels = group_by(df, CHR) %>% 
+    summarise(CHR_pos=mean(pos)) %>%
+    .[chr_to_represent,]
+  
+  if(sum(df$P<alpha)>25){
+    snp_peaksPerChr = group_by(df, CHR) %>% top_n(1, -P) %>% pull(SNP)
+    snp_labels = ifelse(df$P<alpha & df$SNP %in% snp_peaksPerChr, df$SNP, '')
+  }
+  if(sum(df$P<alpha)<=25){
+    snp_labels = ifelse(df$P<alpha, df$SNP, '')
+  }
+  
+  ggplot(df, aes(x=pos, y = -log10(P), color=as.factor(CHR), 
+                 label=snp_labels))+
+    geom_jitter()+
+    geom_hline(yintercept=-log10(alpha), linetype='dashed', color='red')+
+    theme_classic()+
+    scale_x_continuous(breaks=plot_labels$CHR_pos, labels= plot_labels$CHR)+
+    scale_y_continuous(limits=c(-log10(Pmax),NA), expand=c(0,0.5))+
+    labs(x='Chromosome', y=expression(-log[10](P)), title=title)+
+    theme(legend.position = "none", 
+          plot.title = element_text(hjust=0.5, face='bold', size=30, family='Times'),
+          axis.text = element_text(size=11))+
+    scale_color_manual(values=rep(c("cornflowerblue","lightblue4"),
+                                  ceiling(length(df$CHR)/2))[1:length(df$CHR)])+
+    geom_text(vjust=-0.6, hjust=-0.1, col='black', size=3)
+}
+qq_plot = function(pvals, text_title){
+  pvals= na.omit(pvals)
+  
+  # Calculate the inflation factor (GWAS statistic for p values distribution)
+  chisq = qchisq(pvals,1,lower.tail=FALSE)
+  lambda = median(chisq)/qchisq(0.5,1)
+  
+  # Represent a QQ-plot 
+  ggplot(data=NULL,aes(x=-log10(seq(0,1,length.out=length(pvals))),
+               y=-log10(sort(pvals))))+
+  geom_point()+
+  geom_abline(slope=1,intercept = 0, color='red')+
+  annotate('label', x=1, y=round(max(-log10(pvals)))*(3/4), label=paste0('Genomic inflation factor: ', round(lambda,3), size=12))+
+  labs(x='Expected -log10(p)', y='Empirical -log10(p)',
+       title=text_title)+
+  theme_classic()+
+    theme(plot.title = element_text(hjust=0.5, face='bold', size=20, family='Times'),text = element_text(family='Times',size=12))
+}
+
+plot_name = function(names, meta_with_names=meta){
+  return(unname(setNames(meta_with_names[,2], 
+                         meta_with_names[,1])[names]))
+}
+```
+</details>
+
+## Step 1: Filtering and data-standarization
+All files are read  and a common arrange for columns is decided by the function (you don't need to inspect them and change them one by one if everything works!). Here we will define the specifities in the variants that we want to extract. I put some standard filtering for GWAS data (only SNP-variants, MAF>1%, non-strand ambiguous, INFO<95% when given). 
+```{r}
+dir.create(paste0(input_dir, '/clean_data'),recursive = T)
+
+for (path in file_paths){
+  clean_df = standarize_GWASss(path, meta)
+  fwrite(clean_df, paste0(input_dir, '/clean_data/', basename(path)))
+}
+```
+
+
+## Step 2: Quality control plots
+
+Individual checking plots (Manhattan, QQ-plot, P-value histograms and inflation factors)
+```{r}
+clean_paths = list.files(paste0(input_dir, '/clean_data/'), full.names = T)
+inflation_factors=c()
+
+for (path in clean_paths){
+
+  print(paste0('QC: ',basename(path)))
+  df = vroom::vroom(path)
+  
+  # Calculate the inflation factors
+  chisq = qchisq(df$P,1,lower.tail=FALSE)
+  lambda = median(chisq)/qchisq(0.5,1)
+  inflation_factors = c(inflation_factors,lambda)
+
+  # Exploratory plots for quality
+  png(paste0(output_dir, 'plots/', 'Manhattan_', fnames[i], '.png'))
+  print(manhattan_plot(df, paste0('Manhattan plot: ', plot_name(basename(path)), Pmax = 0.1)))
+  dev.off()
+  print('Manhattan created')
+    
+  png(paste0(output_dir, 'plots/', 'QQ-plot_', fnames[i], '.png'))
+  print(qq_plot(df$P, paste0('QQ-plot: ', plot_name(basename(path)))))
+  dev.off()
+  print('QQ created')
+  
+  png(paste0(output_dir, 'plots/', 'Hist_', fnames[i], '.png'))
+  hist(df$P, main=paste0('Histogram: ', unname(file_names[i])), 
+       sub=paste0('Inflation factor: ',round(lambda,2)),
+       col = 'lightblue3', xlab = 'P value', probability = TRUE, freq = F)
+  dev.off()
+  print('Hist created')
+}
+```
+
+
+LD-score regression intercept and its comparison with the inflation factor
+*Requirement:* You need to install LDSC and get the folder inside your working directory (or a link to it). You can find the repository here with the instructions: https://github.com/bulik/ldsc
+As you will see, also depending on your population structure you'll need a file with LD-scores and put it in your working directory. If it is european you can use:  
+wget https://data.broadinstitute.org/alkesgroup/LDSCORE/eur_w_ld_chr.tar.bz2
+tar -jxvf eur_w_ld_chr.tar.bz2
+
+```{shell}
+# Activate the environment 
+conda env create --file ldsc/environment.yml
+source activate ldsc
+
+
+
+```
