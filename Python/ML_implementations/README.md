@@ -6,19 +6,22 @@
 <br />
 <div align="center">
   <a href="https://github.com/othneildrew/Best-README-Template">
-    <img src="protein_1axc.png" alt="Logo" width="80" height="80">
+    <img src="icon_ml.png" alt="Logo" width="80" height="80">
   </a>
 
-  <h3 align="center">HMM-profiler</h3>
+  <h3 align="center">Machine Learning algorithm implementations from scratch</h3>
 
   <p align="center">
-    Read your proteins secrets
+    Learn how your neurons learn! 
     <br />
-    <a href="https://github.com/Gero1999/code/edit/main/Python/HMM_profile_analyser"><strong>Explore the docs »</strong></a>
+    <a href="https://github.com/Gero1999/code/edit/main/Python/ML_implementations"><strong>Explore the docs »</strong></a>
     <br />
     <br />
   </p>
 </div>
+
+The primary goal of this repository is to provide hands-on experience in implementing machine learning algorithms without relying on pre-built libraries. By diving into the code and understanding the mathematical concepts behind these algorithms, you can strengthen your knowledge and intuition in machine learning.
+
 
 ## Implemented Algorithms
 
