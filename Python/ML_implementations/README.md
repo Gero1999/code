@@ -1,7 +1,6 @@
 <div id="top"></div>
 
 
-
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
@@ -33,46 +32,160 @@ Logistic regression is a binary classification algorithm that models the probabi
 **Mathematics:**
 Logistic regression involves the sigmoid function for modeling probabilities:
 
+
 ![Sigmoid Function](https://latex.codecogs.com/svg.image?%5Csigma%28z%29%20%3D%20%5Cfrac%7B1%7D%7B1%20&plus;%20e%5E%7B-z%7D%7D)
+
+Where:
+- **z**: Represents the linear combination of features.
+
+The sigmoid function maps the linear combination of features (z) to a value between 0 and 1, which can be interpreted as the probability of a sample belonging to the positive class.
 
 And the cost function (cross-entropy loss) for optimizing model parameters:
 
 ![Cross-Entropy Loss](https://latex.codecogs.com/svg.image?J%28%5Ctheta%29%20%3D%20-%5Cfrac%7B1%7D%7Bm%7D%5Csum_%7Bi%3D1%7D%5E%7Bm%7D%20%5By%5E%7B%28i%29%7D%20%5Clog%28h%28x%5E%7B%28i%29%7D%29%29%20&plus;%20%281%20-%20y%5E%7B%28i%29%7D%29%20%5Clog%281%20-%20h%28x%5E%7B%28i%29%7D%29%29%5D)
 
-### 2. Neural Networks
+Where:
+- **J(𝜃)**: Represents the cost associated with the current model parameters 𝜃.
+- **m**: Represents the number of training examples.
+- **y^(i)**: Represents the actual target (0 or 1) for the ith training example.
+- **h(x^(i))**: Represents the predicted probability that the ith training example belongs to the positive class.
+
+
+
+### 2. K-Means Clustering
 
 **Description:**
-Neural networks are a fundamental part of deep learning. Here, we implement a basic feedforward neural network, which consists of input, hidden, and output layers. This allows you to grasp the basics of neural network architecture.
+K-Means clustering is an unsupervised machine learning algorithm used for partitioning a dataset into clusters or groups based on similarity. It aims to minimize the within-cluster variance while maximizing the between-cluster variance.
 
 **Mathematics:**
-Neural networks involve concepts such as forward propagation:
+K-Means involves the following key steps:
 
-![Forward Propagation](https://latex.codecogs.com/svg.image?z%5E%7B%28l%29%7D%20%3D%20%5Ctheta%5E%7B%28l-1%29%7D%20%5Ccdot%20a%5E%7B%28l-1%29%7D)
+1. Initialization: Randomly select 'k' initial cluster centroids, where 'k' is the number of clusters you want to create.
 
-Activation functions (e.g., ReLU):
+2. Assignment: For each data point, calculate its distance to each centroid and assign it to the cluster with the nearest centroid. This is typically done using Euclidean distance:
 
-![ReLU Activation](https://latex.codecogs.com/svg.image?a%5E%7B%28l%29%7D%20%3D%20%5Ctext%7BReLU%7D%28z%5E%7B%28l%29%7D%29)
+   ![Euclidean Distance](https://latex.codecogs.com/svg.image?%5Ctext%7BEuclidean%20Distance%7D%28x%2C%20c%29%20%3D%20%5Csqrt%7B%28x_1%20-%20c_1%29%5E2%20&plus;%20%28x_2%20-%20c_2%29%5E2%20&plus;%20...%20&plus;%20%28x_n%20-%20c_n%29%5E2%7D)
 
-And backpropagation for training:
+   Where:
+   - **x**: Represents a data point's coordinates.
+   - **c**: Represents a centroid's coordinates.
 
-![Backpropagation](https://latex.codecogs.com/svg.image?%5Cdelta%5E%7B%28l%29%7D%20%3D%20%5Ctheta%5E%7B%28l%29%7D%20%5Ccdot%20%5Cdelta%5E%7B%28l&plus;1%29%7D%20%5Codot%20f%27%28z%5E%7B%28l%29%7D%29)
+3. Update: Recalculate the centroids for each cluster as the mean of all data points assigned to that cluster:
 
-### 3. Autoencoders
+   ![Centroid Update](https://latex.codecogs.com/svg.image?c_i%20%3D%20%5Cfrac%7B1%7D%7B%7CS_i%7C%7D%20%5Csum_%7Bx%20%5Cin%20S_i%7D%20x)
+
+   Where:
+   - **c_i**: Represents the new centroid for cluster 'i'.
+   - **S_i**: Represents the set of data points in cluster 'i'.
+   - **x**: Represents a data point.
+
+4. Repeat: Steps 2 and 3 are repeated iteratively until convergence. Convergence is typically achieved when the centroids no longer change significantly or after a fixed number of iterations.
+
+**Parameters:**
+- **k**: The number of clusters to create.
+- **Initialization method**: Methods for selecting initial centroids (e.g., random initialization, k-means++).
+- **Convergence criteria**: Conditions for stopping the iterations (e.g., a maximum number of iterations or minimal centroid movement).
+
+
+
+
+
+
+
+### 3. Neural Networks
 
 **Description:**
-Autoencoders are a type of neural network used for unsupervised learning tasks like dimensionality reduction and feature extraction. Implementing autoencoders will give you insight into representation learning.
+Neural Networks, also known as Artificial Neural Networks (ANNs), are a fundamental concept in deep learning and machine learning. They are designed to mimic the structure and functioning of the human brain to solve complex tasks, including classification, regression, and pattern recognition.
+
+**Architecture:**
+A neural network consists of three main types of layers:
+1. **Input Layer**: Receives input features.
+2. **Hidden Layers**: Comprise one or more layers between the input and output layers. These layers contain neurons (or nodes) that process information using activation functions.
+3. **Output Layer**: Produces the final output of the network, which depends on the specific task (e.g., classification or regression).
 
 **Mathematics:**
-Autoencoders involve encoding and decoding processes:
+Neural networks perform a series of operations to make predictions or classifications. Key mathematical concepts include:
 
-![Autoencoder Architecture](https://latex.codecogs.com/svg.image?%5Ctext%7BEncoder%7D%3A%20%5Cquad%20z%20%3D%20f%28x%29%2C%20%5Cquad%20%5Ctext%7BDecoder%7D%3A%20%5Cquad%20x%27%20%3D%20g%28z%29)
+1. **Linear Combination (Weighted Sum)**:
+   For each neuron in a layer (except the input layer), compute a weighted sum of inputs, including a bias term:
+   
+   ![Weighted Sum](https://latex.codecogs.com/svg.image?z_j%20%3D%20%5Csum_%7Bi%3D1%7D%5E%7Bn%7D%20w_{ij}%20x_i%20&plus;%20b_j)
 
-Along with loss functions like mean squared error (MSE) for reconstruction:
+   Where:
+   - **z_j**: Weighted sum for neuron j.
+   - **w_{ij}**: Weight connecting neuron i to neuron j.
+   - **x_i**: Output from neuron i in the previous layer.
+   - **b_j**: Bias term for neuron j.
 
-![MSE Loss](https://latex.codecogs.com/svg.image?J%20%3D%20%5Cfrac%7B1%7D%7Bm%7D%20%5Csum_%7Bi%3D1%7D%5E%7Bm%7D%20%5Cleft%5C%7C%20x%5E%7B%28i%29%7D%20-%20x%27%5E%7B%28i%29%7D%20%5Cright%5C%7C%5E2)
+2. **Activation Function**:
+   Apply an activation function to the weighted sum to introduce non-linearity. Common activation functions include:
+   
+   - **Sigmoid**: Used for binary classification.
+   - **ReLU (Rectified Linear Unit)**: Commonly used in hidden layers.
+   - **Softmax**: Used in the output layer for multiclass classification.
+
+3. **Forward Propagation**:
+   The output of one layer becomes the input for the next layer, propagating through the network. This process continues until the output layer produces the final result.
+
+4. **Loss Function**:
+   A loss function measures the difference between predicted and actual values. Common loss functions include:
+   
+   - **Mean Squared Error (MSE)**: Used for regression tasks.
+   - **Cross-Entropy Loss**: Used for classification tasks.
 
 
+### 4. Autoencoders
 
+**Description:**
+Autoencoders are a type of artificial neural network used for unsupervised learning and dimensionality reduction. They are primarily employed for feature learning, data compression, and anomaly detection.
+
+**Architecture:**
+Autoencoders consist of two main components:
+1. **Encoder**: This part of the network compresses the input data into a lower-dimensional representation, often called the encoding or bottleneck layer.
+2. **Decoder**: The decoder takes the compressed representation and attempts to reconstruct the original input data.
+
+**Mathematics:**
+Autoencoders use a loss function to measure the difference between the input and the reconstructed output. Key mathematical components include:
+
+1. **Encoding Function (Encoder)**:
+   - The encoder reduces the input data into a lower-dimensional representation using a set of weights and biases.
+   - The encoding function can be represented as:
+   
+   ![Encoding Function](https://latex.codecogs.com/svg.image?%5Cmathbf%7Bh%7D%20%3D%20f%28%5Cmathbf%7BW%7D%20%5Ccdot%20%5Cmathbf%7Bx%7D%20&plus;%20%5Cmathbf%7Bb%7D%29)
+
+   Where:
+   - **h**: Encoded representation.
+   - **W**: Weight matrix.
+   - **x**: Input data.
+   - **b**: Bias term.
+
+2. **Decoding Function (Decoder)**:
+   - The decoder attempts to reconstruct the original input data from the encoded representation.
+   - The decoding function can be represented as:
+   
+   ![Decoding Function](https://latex.codecogs.com/svg.image?%5Chat%7B%5Cmathbf%7Bx%7D%7D%20%3D%20g%28%5Cmathbf%7BW%7D%27%20%5Ccdot%20%5Cmathbf%7Bh%7D%20&plus;%20%5Cmathbf%7Bb%7D%27%29)
+
+   Where:
+   - **x̂**: Reconstructed input data.
+   - **W'**: Weight matrix.
+   - **h**: Encoded representation.
+   - **b'**: Bias term.
+
+3. **Loss Function**:
+   - Autoencoders use a loss function to measure the dissimilarity between the input data and the reconstructed data.
+   - Common loss functions include Mean Squared Error (MSE) or Binary Cross-Entropy, depending on the type of data.
+
+**Training:**
+Autoencoders are trained using unlabeled data. The training process aims to minimize the loss function by adjusting the weights and biases in both the encoder and decoder.
+
+**Applications:**
+Autoencoders have various applications, including:
+- Image denoising: Removing noise from images.
+- Anomaly detection: Identifying unusual patterns in data.
+- Feature learning: Extracting informative features from data.
+- Data compression: Reducing the dimensionality of data while preserving important information.
+
+Autoencoders are versatile and find use in domains such as computer vision, natural language processing, and data analysis.
 
 ## Built With
 
