@@ -1,0 +1,1624 @@
+---
+title: "mt_process"
+author: "Gerardo José Rodríguez"
+date: "2023-04-25"
+output: html_document
+---
+
+# Load the pre-obtained datasets
+Remember that in each line the SNP (inedepent for your reference phenotype) should be present
+
+```{r}
+getFileNames = function(paths){gsub('\\..*','',basename(paths))}
+getFileNames = function(paths){
+  gsub('(\\.txt)|(\\.gz)','',basename(paths))}
+
+simplifyNameFiles = function(file_path){
+          f = getFileNames(file_path) 
+          f2 = gsub('\\(.*\\)', '', f)
+          if(sum(duplicated(f))-sum(duplicated(f2))==0){
+            f=f2
+          }
+          f = gsub('^[HL].+ lipoprotein', 'HDL', f) 
+          f = gsub('[Bb]ody [Mm]ass [Ii]ndex', 'BMI', f) 
+          f = gsub('Waist[-].* ratio', 'WHR', f)
+          f = gsub('[Vv]isceral adipose tissue', 'VAT', f)
+          f = gsub('[Hh]emoglobin', 'Hb', f)
+          f = gsub('_', ' ', f)
+          return(f)
+}
+
+p.adjust.mtx = function(mtx, method='fdr'){
+  mtx %>%
+    as.vector() %>%
+    p.adjust(method=method) %>%
+    matrix(ncol=ncol(mtx), nrow=nrow(mtx), dimnames = list(rownames(mtx), colnames(mtx)))
+}
+
+
+mtxToGGdataFrame = function(mtx, values_colname='value'){
+  mtx %>%
+    as.data.frame() %>%
+    dplyr::mutate(exposure = rownames(.)) %>%
+    pivot_longer(cols = 1:(ncol(.)-1),names_to = 'outcome', values_to = values_colname)
+  }
+```
+
+```{r message=FALSE, warning=FALSE, include=FALSE, paged.print=FALSE}
+library("fs")
+library("vroom")
+library("tidyverse")
+library('dplyr')
+library('biomaRt')
+library('openxlsx')
+library('data.table')
+library('tidyr')
+library('pheatmap')
+library('ggrepel')
+
+library("gwascat")
+library("VennDiagram")
+library("navmix")
+library("PheWAS")
+library("devtools")
+library("rvest")
+
+library("ieugwasr")
+library("genetics.binaRies")
+
+library('meshr')
+library("TwoSampleMR")
+```
+
+0) Set the variables you need to work with
+```{r}
+# Folder of your internal data
+df.comb = readRDS('saved_objects/df.comb.RDS') 
+int_data = split(df.comb, df.comb$DATA)
+
+# Folder of your external data
+ext_files = list.files('data/gwasc_final', full.names = T)
+info_mtx = read.xlsx('metainfo_gwasc2.xlsx')
+geno_panel = snpStats::read.plink(bed = 'data/genotype_data/1kg.v3/EUR.bed', 
+                                  bim = 'data/genotype_data/1kg.v3/EUR.bim', 
+                                  fam = 'data/genotype_data/1kg.v3/EUR.fam')
+
+# Define a set of colors for your analysis by group of study (i.e, age)
+color_vr = c(Adult='purple',Child='yellow',ChildAdult='paleturquoise3')
+
+getAlleles = function(rsids, geno_panel=geno_panel){
+  geno_panel$map$allele.1[match(rsids, geno_panel$map$snp.name)]
+}
+```
+
+
+1) Select exclusively the external files with good imputations
+```{r}
+ext_traits = info_mtx %>% 
+  as.data.frame() %>%
+  dplyr::mutate(N0 = as.numeric(N0),
+                Nimp = as.numeric(Nimp),
+                Nmiss = as.numeric(Nmiss),
+                Ravg = as.numeric(Ravg)) %>%
+  dplyr::filter(Nmiss==0, 
+                Ravg>0.6|is.nan(Ravg)) %>%
+  filter(!Trait %in% c('Left-handedness', 'Intelligence', 'Apples liking', 'Alcohol liking')) %>%
+  dplyr::filter(Classification==4 | Classification==1)   # HERE IS THE IMPORTANT CHANGE
+
+ext_files = ext_files[getFileNames(ext_files) %in% ext_traits$Trait]
+```
+
+
+
+## 2) Load input files
+
+2) Make a common matrix with all the snps you need
+```{r}
+snps = vroom(ext_files[2], col_types = c('c','c','n','n','n', 'n', 'c')) %>% 
+  arrange(SNP, EA) %>% select(SNP,EA)
+
+outcome_dfs = lapply(ext_files, \(path){
+  print(path)
+  
+  df=vroom(path, show_col_types = F) 
+  
+  if(!'sample_size' %in% colnames(df)){df$sample_size= as.numeric(info_mtx[getFileNames(path),'Sample_size'])}
+    #if(!'NEA' %in% colnames(df)){df$NEA=  df0$NEA[match(df$SNP, df0$SNP)]}
+    #if(!'EAF' %in% colnames(df)){df$EAF=  df0$EAF[match(df$SNP, df0$SNP)]}
+  
+  df=df%>% 
+    arrange(SNP,EA)  %>%
+   #dplyr::mutate(BETA=ifelse(is.na(BETA)&P>0.9, 1e-100, BETA)) %>%
+    dplyr::mutate(BETAadj = ifelse(is.na(r), BETA, BETA*r)) %>%
+    dplyr::mutate(Z=BETAadj/SE,
+                  DATA = getFileNames(path)) %>%
+    dplyr::select(BETA,SE, Z, BETAadj, SNP, EA, P, r, DATA, proxy, sample_size)%>%
+    #dplyr::filter(!SNP %in% snps.Age.intersecting)
+  print(paste0(getFileNames(path),': ',sum(df$BETA== 1e-100) ))
+  return(df)
+}) %>% rbindlist() 
+
+outcome_dfs %>% dplyr::filter(is.na(BETA))
+exp_info = read.xlsx('matrix_info.final.exposures.xlsx') %>%
+  column_to_rownames("Trait") %>% as.matrix()
+
+exp_dfs = lapply(list.files('data/initial_final',full.names = T), \(path){
+  
+  df=vroom(path, show_col_types = F) 
+  
+    if(!'sample_size' %in% colnames(df)){df$sample_size= as.numeric(exp_info[getFileNames(path),'sample_size'])}
+  
+  df= df%>% 
+    arrange(SNP,EA)  %>%
+    dplyr::mutate(BETAadj = ifelse(is.na(r), BETA, BETA*r)) %>%
+    dplyr::mutate(Z=BETAadj/SE,
+                  DATA = getFileNames(path))%>%
+    #dplyr::filter(!SNP %in% snps.Age.intersecting)
+}) %>% rbindlist()
+
+whole_dfs = bind_rows(exp_dfs, outcome_dfs)
+
+#whole_dfs = whole_dfs %>% filter(is.na(r) | abs(r)>=0.8) 
+whole_dfs %>% filter(!is.na(r), abs(r)<0.8) 
+whole_dfs$Classification = setNames(info_mtx$Classification, info_mtx$Trait)[whole_dfs$DATA]
+
+```
+
+```{r}
+# Use your annottated classification to separate traits by colors in PCA
+whole_dfs = whole_dfs %>%
+  mutate(trait_group = case_when(
+    startsWith(DATA, 'ChildAdult') ~ "Red",
+    startsWith(DATA, 'Child') ~ "Green",
+    startsWith(DATA, 'Adult') ~ "Blue",
+    startsWith(DATA, '.') ~ "lightblue"
+  )) %>%
+  mutate(Trait_group= case_when(
+      Classification==4  ~ 'Cardiovascular traits',
+      Classification==3  ~ 'Anthropometric measure',
+      startsWith(DATA, 'ChildAdult') ~ "ChildAdult BTV",
+      startsWith(DATA, 'Child') ~ "Child BT",
+      startsWith(DATA, 'Adult') ~ "Adult BT",
+      Classification==2   ~ "Blood biomarker",
+      Classification==1  ~ "Mental traits"
+    ), Trait= simplifyNameFiles(DATA))
+
+# THIS SPECIFIC LINE CAN BE ELIMINATED. I INCLUDED IT BECAUSE I DID NOT ANNOTATE CORRECTLY MY EFFECT ALLELES
+whole_dfs$EA = getAlleles(whole_dfs$SNP, geno_panel)
+whole_dfs$SD = whole_dfs$SE * whole_dfs$sample_size
+whole_dfs_pivoted = whole_dfs %>% pivot_longer(cols=c('BETA','SE','P', 'SD'), names_to='Stat', values_to='Value')
+```
+
+
+
+Make an array with all stats that you can use for the rest of your analysis
+```{r}
+StatsArray = array(NA, dim=c(length(unique(paste0(whole_dfs$SNP, ':', whole_dfs$EA))), length(unique(whole_dfs$DATA)), length(unique(whole_dfs_pivoted$Stat))),
+                   dimnames = list(unique(paste0(whole_dfs$SNP, ':', whole_dfs$EA)), unique(whole_dfs$DATA), unique(whole_dfs_pivoted$Stat)))
+StatsArray[cbind(paste0(whole_dfs_pivoted$SNP, ':', whole_dfs_pivoted$EA), whole_dfs_pivoted$DATA,  whole_dfs_pivoted$Stat)] = whole_dfs_pivoted$Value
+
+sum(is.na(StatsArray))
+idx.na = which(is.na(StatsArray),arr.ind = T)
+StatsArray[idx.na] = mean(StatsArray[idx.na[1],,idx.na[3]], na.rm = T)
+
+df.comb$sex = gsub('.*_(.*)','\\1',df.comb$DATA)
+```
+
+
+Non-segregated PCA
+```{r}
+# Create a matrix that you can use for operations 
+Bmtx = StatsArray[,,'BETA']/StatsArray[,,'SE']
+pca_res =  prcomp(t(Bmtx), scale=F, center = T)
+pc_vars = round(summary(pca_res)$importance[2,],3)*100
+
+# Decide on some colors details
+pca_colors = setNames(c('#006970', 'gold3', 'purple2', 
+                        'red', 'blue', 'orange2', 'red3'),
+                      c('ChildAdult BTV', "Child BT", "Adult BT", 
+                        'Blood biomarkers', 'Psychological conditions', 'Anthropometric measures', 'Cardiovascular traits'))
+
+
+png(paste0('results/PCA/PCA-All.png'), res=100)
+  pca_res$x %>%
+    as.data.frame() %>%
+    mutate(Trait=rownames(.)) %>%
+    merge(.,info_mtx, by='Trait', all.x=T) %>%
+    mutate(Trait_group= case_when(
+      Classification==4  ~ 'Cardiovascular traits',
+      Classification==3  ~ 'Anthropometric measure',
+      startsWith(Trait, 'ChildAdult') ~ "ChildAdult BTV",
+      startsWith(Trait, 'Child') ~ "Child BT",
+      startsWith(Trait, 'Adult') ~ "Adult BT",
+      Classification==2   ~ "Blood biomarker",
+      Classification==1  ~ "Psychological conditions"
+    ), Trait= simplifyNameFiles(Trait)) %>%
+    mutate(Trait_group.color = pca_colors[Trait_group]) %>%
+    mutate(Trait=gsub("\\(.*\\)",'',Trait)) %>%
+    arrange(-PC2, -PC1) %>% 
+    mutate(Trait_label = ifelse(!duplicated(Trait_group), Trait_group, ''))%>%
+    mutate(Trait_label = ifelse(grepl('(Child [mfb].*)|(Adult [mfb].*)',Trait), gsub('_',' ', Trait),  '')) %>%
+  ggplot(aes(x=PC1, y=PC2, color=Trait_group, label=Trait))+
+    geom_point()+ 
+    theme_classic()+
+    theme( legend.position = 'right', legend.title = element_text(hjust=0.5, size=10),
+           legend.text = element_text(size=7), legend.background = element_rect(size=0.1, color='gray55'),
+          plot.title = element_text(hjust=0.5,family = 'Times', face='bold', size=14))+
+    geom_text_repel(max.overlaps = 8, label.size = 0.1, size=2.5, label.padding = 0.1)+
+    labs(title=bquote('PCA plot of traits Z-values\nover all genetic instruments'),
+         x=paste0('PC1 (Var: ', pc_vars[1], '%)'),
+         y=paste0('PC2 (Var: ', pc_vars[2], '%)'),
+         color = 'Trait groups')+
+    scale_color_manual(values=pca_colors)
+  ggsave('results/PCA/PCA-All.png', plot = p, device = 'png', width = 7, height = 5)
+dev.off()                
+
+p
+```
+
+
+
+```{r}
+
+# Check which are the SNPs contributing the most in the variation of the data
+weights_var = as.data.frame(pca_res$rotation)**2  %>%
+  rowSums()  %>% sort(., decreasing = T) 
+
+props_var = weights_var/sum(weights_var)*100 
+median(props_var); mean(props_var)
+
+substr(names(props_var), 1, nchar(names(props_var))-2)
+
+# Top 10 variables
+pca_rs = data.frame(snp = names(props_var), var=unname(props_var), 
+                    rsid=substr(names(props_var), 1, nchar(names(props_var))-2)) %>% 
+  top_n(30, var) %>%
+  rbind(data.frame(rsid='Average SNP', var=mean(props_var), snp='Average SNP'),.) 
+
+pca_rs = cbind(pca_rs, df.comb[match(pca_rs$rsid, df.comb$SNP),] %>% dplyr::select(age, sex, DATA))
+all_snp = useEnsembl(biomart='ENSEMBL_MART_SNP', host='https://grch37.ensembl.org', dataset='hsapiens_snp')
+gene_info = getBM(attributes = c('refsnp_id','chr_name', 'chrom_start', 'associated_gene','ensembl_gene_name'),
+                 filters='snp_filter', 
+                 values= unique(df.comb$SNP), 
+                 mart=all_snp)
+pca_rs$gene = gene_info$associated_gene[match(pca_rs$rsid, gene_info$refsnp_id)]
+
+
+
+pca_rs2 = pca_rs[c(1:12,15),]
+p= ggplot(pca_rs[1:9,], aes(x=reorder(rsid, -var), y=var, fill=age, label=gene))+
+  geom_col(color='gray3', size=0.25)+
+  theme_classic()+
+    geom_text(aes(label=gene), vjust=-1.3, family='Times', size=3, angle=0)+
+    theme(plot.title = element_text(hjust=0.5,family = 'Times', face='bold', size=16),
+          axis.text.x = element_text(angle=45, hjust=1), legend.position =  c(0.898,0.6),
+          legend.box.background = element_rect(color = "black", fill = "white"))+
+    labs(title=bquote('PCA loadings contribution of the top genetic instruments'),
+         x=paste0('Genetic instruments (PCA variables)'),
+         y=paste0('Loadings of the overall variance (%)'),
+         color = 'Trait groups')+
+  scale_fill_manual(values=color_vr)+
+  scale_y_continuous(expand=expansion(mult=c(0, 0.15)))
+p; pca_rs
+ggsave(plot = p, filename = 'Loadings_all-PC.png', path = 'results/PCA',device = 'png')
+```
+
+
+
+# Forest PheWAS of top variants
+
+```{r}
+png('results/PCA/tops_all.png',res=90)
+
+# Select top SNPs
+snps = pca_rs %>% na.omit() %>% pull(rsid) %>% .[1:3]
+
+# Select top SNP by age
+snps = pca_rs %>% dplyr::filter(!duplicated(age)) %>% na.omit() %>% pull(rsid)
+
+whole_dfs %>% 
+    dplyr::filter(SNP %in% snps) %>%
+    dplyr::mutate(`Trait_group` = ifelse(grepl('^[AC][dh][iu]l[dt].*',`Trait_group`), 'BT/BTV exposures', Trait_group))%>%
+    dplyr::arrange(`Trait_group`, Trait) %>%
+    dplyr::mutate(dir = ifelse(BETA>0, 'Possitive effect', 'Negative effect'),
+                  Trait_order = 1:nrow(.)) %>%
+    # dplyr::mutate(Trait_group=ifelse(Trait_group=='Psychological conditions', 'Mental conditions', Trait_group))%>%
+    dplyr::filter(!duplicated(paste0(SNP,DATA))) %>%
+    ggplot(aes(x=reorder(Trait, Trait_order), y=-log10(P), color=Trait_group, fill=Trait_group))+
+    geom_point(aes(shape=dir), stroke=1, size=1)+
+    scale_shape_manual(values = c(25, 24), names)+
+    scale_color_manual(values=c('blue4', 'red', 'lightblue3'))+
+    scale_fill_manual(values=c('blue4', 'red', 'lightblue3'))+
+      guides(shape = guide_legend(title = "Effect size direction",  nrow=2, bycol = TRUE,direction = 'vertical'),
+             fill = guide_legend(title = "Trait group", nrow=3, bycol = TRUE, direction='vertical'),
+             color =  guide_legend(title = "Trait group", nrow=3, bycol = TRUE, direction='vertical'))+
+    theme_classic(base_family = 'Times')+
+      theme(axis.text = element_text(family = "Times", size=9, face='bold'),
+            axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+            axis.title.x = element_text(face='bold', vjust=10),
+            axis.ticks = element_line(size=0.2),
+            axis.line=element_line(colour='gray70'),
+            plot.background = element_blank(),
+            panel.border = element_blank(),
+            plot.title = element_text(
+              family = "Times",
+              face = "bold",
+              size = 14, hjust = 0.5, vjust = 0.5,
+              margin = margin(b = 10)))+
+    geom_hline(yintercept = -log10(5e-9), linetype='dashed', color='gray70',
+               show.legend = T)+
+  #annotate(geom='text', x=Inf, y=-log10(5e-9-3e-9), label=expression(alpha==5e-9), size=2.8, hjust=1, vjust=0, color='gray25')+
+    labs(x='Diseases and traits studied', 
+         y=bquote(-log(P)), 
+         title=paste0(snp, ': PheWAS plot of the dominant\nPCA-feature in ', gsub('_','',i), ' instruments'))+
+    scale_y_continuous(limits = c(-0.5,16),expand = c(0,0))+ # REMEMBER TO CHANGE LIMITS ALWAYS (-8,50?)
+    facet_wrap(~SNP, nrow=3, scales='free_y', dir = 'v')+
+    theme(legend.position='none', legend.justification='center', strip.background = element_blank(), axis.text = element_text(size=7), axis.title = element_text(size=8.5))+
+    labs(title='')
+
+  ggsave(filename = paste0('results/PCA/topPheWAS.png'), plot = p, device = 'png',dpi = 120,width = 5.5, height=6)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+## Do Mendelian Randomization and identify the trait-relations 
+```{r}
+library(TwoSampleMR)
+library(MRInstruments)
+
+snps.Age.intersecting = df.comb %>%dplyr::filter(duplicated(paste0(SNP, sex))) %>% pull(SNP)
+
+files_exposure = list.files('data/initial_final_LeadSNPs/',full.names = T) 
+
+files_outcome = list.files('data/gwasc_final/',full.names = T) %>%
+  .[getFileNames(.) %in% getFileNames(ext_files)]
+
+
+MR_array  = array(NA, dim=c(length(files_exposure), length(files_outcome),4),
+                  dimnames = list(getFileNames(files_exposure),
+                                  getFileNames(files_outcome),
+                                  c('Inverse variance weighted',
+                                    'Weighted median','MR Egger','MR Presso')))
+
+
+df_exposures = do.call(rbind, lapply(files_exposure, function(f_exposure){
+    df = vroom(f_exposure, show_col_types = F) %>% 
+      dplyr::select(SNP, EA, P, BETA, SE, NEA, EAF, sample_size) %>%
+      dplyr::filter(!SNP %in% snps.Age.intersecting) %>%
+    `colnames<-`(c('SNP', "effect_allele.exposure", 'pval.exposure', 'beta.exposure', 'se.exposure', 'other_allele.exposure', 'eaf.exposure', 'samplesize.exposure')) %>%
+    mutate(id.exposure=getFileNames(f_exposure), 
+           exposure=getFileNames(f_exposure),
+           pval_origin.exposure='reported',
+           data_source.exposure='textfile',
+           mr_keep.exposure=TRUE)
+}))
+
+
+df0=vroom('data/initial_final/Adult_both.txt.gz')
+mat_info = read.xlsx('metainfo_gwasc2.xlsx') %>%
+  column_to_rownames("Trait") %>%
+  as.matrix()
+
+# Read the outcomes. Exclude LD-proxy imputations with low LD (r<0.8)
+df_outcomes = do.call(rbind, lapply(files_outcome, function(f_outcome){
+  print(f_outcome)
+    df = vroom(f_outcome, show_col_types = F) 
+    if(!'sample_size' %in% colnames(df)){df$sample_size= as.numeric(mat_info[getFileNames(f_outcome),'Sample_size'])}
+    if(!'NEA' %in% colnames(df)){df$NEA=  df0$NEA[match(df$SNP, df0$SNP)]}
+    if(!'EAF' %in% colnames(df)){df$EAF=  df0$EAF[match(df$SNP, df0$SNP)]}
+    df %>% 
+      filter(abs(r)>=0.8|is.na(r)) %>%
+      #mutate(BETA= ifelse(is.na(r), BETA,BETA*(r/abs(r)))) %>%
+      #mutate(BETA=BETA*r) %>% 
+      dplyr::select(SNP, EA, P, BETA, SE, NEA, EAF, sample_size) %>%
+    `colnames<-`(c('SNP', "effect_allele.outcome", 'pval.outcome', 'beta.outcome', 'se.outcome', 'other_allele.outcome', 'eaf.outcome', 'samplesize.outcome')) %>%
+      dplyr::filter(!SNP %in% snps.Age.intersecting) %>%
+    mutate(id.outcome=getFileNames(f_outcome), 
+           outcome=getFileNames(f_outcome),
+           pval_origin.outcome='reported',
+           data_source.outcome='textfile',
+           mr_keep.outcome=TRUE)
+}))
+  #filter(is.na(r) | abs(r)>=0.8) %>%
+  #mutate(BETA = BETA * (r/abs(r)))
+
+
+# Merge both datasets aligning BETA/SE with correspondant SNPs. Make sure there are no 0s or NAs
+harm_df = harmonise_data(df_exposures, df_outcomes, action = 2) %>% 
+  mutate(beta.outcome = ifelse(beta.outcome==0, 1e-100, beta.outcome), 
+         se.outcome = ifelse(se.outcome==0, 1e-100, se.outcome),
+         pval.outcome = ifelse(pval.outcome==0, 1e-100, pval.outcome), 
+         pval.outcome = ifelse(pval.outcome>1, 1, pval.outcome), 
+         beta.exposure = ifelse(beta.exposure==0, 1e-100, beta.exposure), 
+         se.exposure = ifelse(se.exposure==0, 1e-100, se.exposure),
+         pval.exposure = ifelse(pval.exposure==0, 1e-100, pval.exposure),
+         pval.exposure = ifelse(pval.exposure>1, 1, pval.exposure), 
+         combination = paste0(exposure, '.', outcome))
+  
+
+# Keep the instruments that do not exhibit obvious pleiotropy/ 
+harm_df2 = steiger_filtering(harm_df) %>%
+  dplyr::mutate(steiger_pval.adj = p.adjust(steiger_pval, 'fdr')) %>%
+  dplyr::filter(steiger_pval.adj<0.1 ) 
+
+# 1) Run all standard MR tests
+mr_res = mr(harm_df2, method_list = c('mr_ivw', 'mr_weighted_median',
+                                      'mr_egger_regression')) 
+
+# Annotate those that where not run due to the lack of instruments
+mr_res %>% dplyr::select(exposure, outcome) %>% unique() %>% pull(outcome) %>% table() #%>% names() %>% paste0(., collapse='", "') %>% print()
+mr_res %>% dplyr::select(exposure, outcome) %>% unique() %>% pull(outcome) %>% table() %>% mean(.)
+mr_res %>% pull(outcome) %>% unique() %>% length()
+
+# Include sensitivity tests to the results
+mr_het = mr_heterogeneity(harm_df2) %>% dplyr::mutate(Q_pval.adj = p.adjust(Q_pval, 'fdr'))
+harm_df2$r.exposure = get_r_from_pn(harm_df2$pval.exposure, harm_df2$samplesize.exposure)
+harm_df2$r.outcome = get_r_from_pn(harm_df2$pval.outcome, harm_df2$samplesize.outcome)
+mr_dir = directionality_test(harm_df2) %>% dplyr::mutate(steiger_pval.adj = p.adjust(steiger_pval, 'fdr'))
+mr_plt = mr_pleiotropy_test(harm_df2) %>% dplyr::mutate(plt_pval = pval) %>%
+  dplyr::select(-pval) %>% dplyr::mutate(plt_pval.adj = p.adjust(plt_pval, 'fdr'))
+
+
+# Test the instruments individually 
+mr_single_res = mr_singlesnp(harm_df2) %>%
+  mutate(contrast = paste0(exposure,'.', outcome))
+
+mr_single_res2 = mr_single_res %>% 
+  mutate(pval.adj = p.adjust(p, 'fdr')) %>%
+  group_by(exposure, outcome) %>%
+  summarise(valid_instruments = mean(pval.adj<0.1)) %>%
+  dplyr::mutate(combination = paste0(exposure,'.',outcome))
+
+
+# Bind all together in one single dataframe with MR results
+merged_res = merge(mr_res, mr_het,by=c('exposure', 'outcome', 'method'), all.x=T)
+all_res = Reduce(function(x,y) merge(x,y, by=c('exposure', 'outcome'), all=T), list(merged_res, mr_dir, mr_plt, mr_single_res2)) %>%
+  dplyr::select(-starts_with('id'))
+
+```
+
+
+# Produce all MR heatmap; represent results
+```{r}
+all_res$classification = setNames(info_mtx$Classification, info_mtx$Trait)[all_res$outcome]
+all_res = all_res %>% mutate(group = case_when(
+  classification==4  ~ 'Cardiovascular traits',
+  classification==3  ~ 'Anthropometric measure',
+  classification==2   ~ "Blood biomarker",
+  classification==1  ~ "Mental traits"
+))
+
+
+
+method_nomenclature = setNames(c('IVW', 'WM', 'Egger'),c("Inverse variance weighted", "Weighted median", "MR Egger"))
+  
+lapply(unique(all_res$group), function(g){
+  print(paste0('GROUP: ', g))
+  all_res2 = all_res %>% 
+    dplyr::filter(group==g) %>%
+    dplyr::mutate(exposure=simplifyNameFiles(exposure))
+  
+plot_list = lapply(na.omit(unique(all_res2$method)), function(m){
+  print(m)
+  mname = setNames(c('IVW', 'WM', 'Egger'),c("Inverse variance weighted", "Weighted median", "MR Egger"))[m]
+  mr_res_plots = all_res2 %>%
+    dplyr::filter(method==m,
+                  outcome %in% ext_traits$Trait) %>%
+    dplyr::mutate(pval= p.adjust(pval, 'fdr')) %>%
+    dplyr::mutate(`Causal effect estimate`= ifelse(pval<0.1, b, NA) )  %>%
+    dplyr::mutate(outcome=simplifyNameFiles(outcome))
+  
+  if (nrow(mr_res_plots)==0){print('This one is empty'); next}
+  dir.create(paste0('results/mr/', g, mname),recursive = T)
+  
+  # Run on the beta estimate and sgnificant beta estimates
+    for (b.est in c('b', 'Causal effect estimate')){
+      mr_res_plots2 = mr_res_plots %>% 
+        dplyr::mutate(beta = pull(mr_res_plots, b.est))
+      
+      if(sum(!is.na(mr_res_plots2$`Causal effect estimate`))==0){print('No significant value');return()}
+      p1=ggplot(mr_res_plots2, aes(exposure, outcome)) +
+        geom_tile(aes(fill= beta), colour='gray100', size=0.25, lwd=0.3, linetype=1)+
+        scale_fill_gradient2(na.value='gray85', low = "darkblue", mid='#33008314', high = "darkred", midpoint=0)+
+        scale_y_discrete(expand=c(0,0))+
+        labs(x='', y='',fill='Causal\neffect', 
+             title = paste0('Heatmap of the significant causal effects \non ',m))+
+        theme_classic()+
+        theme(legend.position = "right",
+              legend.justification = 'center',
+          legend.title = element_text( vjust=0.5, hjust=0.5, family = 'Times'),
+          axis.text = element_text(family = "Times", size=9),
+          axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+          axis.ticks = element_line(size=0.2),
+          axis.title=element_text(face='bold'),
+          axis.line=element_line(colour='gray100'),
+          plot.background = element_blank(),
+          panel.border = element_blank(),
+          plot.title = element_text(
+            family = "Times",
+            face = "bold",
+            size = 10, hjust = 0.5, vjust = 0.5,
+            margin = margin(b = 10)))+
+        coord_fixed(ratio = 0.38/1)+
+        labs(x='Exposure trait', y='Outcome trait')+
+        guides(fill=guide_colorbar(barwidth = 0.8, barheight = 10, ticks = F,label.vjust = 1)) 
+      p1
+      ggsave(paste0('results/mr/', g, mname,'/HM_', b.est,'_',g, '_', m, '.png'))
+      
+    }
+  
+    p2=mr_res_plots2 %>% 
+        ggplot(aes(exposure, outcome)) +
+        geom_tile(aes(fill= pval), colour='gray100', size=0.25, lwd=0.3, linetype=1)+
+        scale_fill_gradient(limits=c(0,1), high = 'lightblue', low='purple')+
+        scale_y_discrete(expand=c(0,0))+
+        labs(x='', y='',fill='P-value\nFDR adjusted\n', 
+             title = paste0('Heatmap of the exposure-outcome\nsignificant causal effects \non ',m))+
+        theme_classic()+
+        theme(legend.position = "right",
+              legend.justification = 'center',
+          legend.title = element_text( vjust=0.5, hjust=0.5, family = 'Times'),
+          axis.text = element_text(family = "Times", size=9),
+          axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+          axis.ticks = element_line(size=0.2),
+          axis.line=element_line(colour='gray100'),
+          plot.background = element_blank(),
+          panel.border = element_blank(),
+          plot.title = element_text(
+            family = "Times",
+            face = "bold",
+            size = 10, hjust = 0.5, vjust = 0.5,
+            margin = margin(b = 10)))+
+        coord_fixed(ratio = 0.38/1)+
+      labs(x='Exposure trait', y='Outcome trait')+
+        guides(fill=guide_colorbar(barwidth = 0.8, barheight = 10, ticks = F,label.vjust = 1))
+    p2
+    ggsave(paste0('results/mr/', g, mname,'/HM_pvalFDR_',g,'_', m, '.png'))
+
+    p3=mr_res_plots2 %>% 
+      dplyr::mutate(Het.label = ifelse(Q_pval.adj<0.05, 'H', ''), 
+                    Plt.label = ifelse(plt_pval.adj<0.05, 'P', ''),
+                    Dir.label = ifelse(steiger_pval.adj>0.05, 'D', '')) %>%
+      dplyr::mutate(Het.label = ifelse(is.na(Het.label), '', Het.label), 
+                    Plt.label = ifelse(is.na(Plt.label), '', Plt.label),
+                    Dir.label = ifelse(is.na(Dir.label), '', Dir.label),
+                    plt_pval.adj<0.05, 'P', '') %>%
+      dplyr::mutate(Label = paste0(Het.label, Plt.label, Dir.label)) %>%
+        ggplot(aes(exposure, outcome)) +
+        geom_tile(aes(fill= valid_instruments, label=Label), colour='gray100', size=0.25, lwd=0.3, linetype=1)+
+        scale_fill_gradient(limits=c(0,1), high = 'gold4', low='lightyellow2')+
+        scale_y_discrete(expand=c(0,0))+
+        labs(x='Exposure trait', y='Outcome trait',fill='Valid IVs\n(%)', 
+             title = paste0('Heatmap of the exposure-outcome\nsignificant instruments proportion \non ',m))+
+        theme_classic()+
+        theme(legend.position = "right",
+              legend.justification = 'center',
+          legend.title = element_text( vjust=0.5, hjust=0.5, family = 'Times'),
+          axis.text = element_text(family = "Times", size=9),
+          axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+          axis.ticks = element_line(size=0.2),
+          axis.line=element_line(colour='gray100'),
+          plot.background = element_blank(),
+          panel.border = element_blank(),
+          plot.title = element_text(
+            family = "Times",
+            face = "bold",
+            size = 10, hjust = 0.5, vjust = 0.5,
+            margin = margin(b = 10)))+
+      labs(x='Exposure trait', y='Outcome trait')+
+      geom_text(aes(label=Label), color='black', size=1.8)+
+        coord_fixed(ratio = 0.38/1)+
+        guides(fill=guide_colorbar(barwidth = 0.8, barheight = 10, ticks = F,label.vjust = 1))
+    p3
+    ggsave(paste0('results/mr/', g, mname,'/HM_instruments_',g,'_', m, '.png'))
+    
+    return(gridExtra::arrangeGrob(grobs = list(p1+guides(fill = guide_legend(override.aes = list(size = 2)))+labs(title=paste0('Causal effects estimates (', mname, ')', x=''))+theme(legend.text = element_text(size=5.5), legend.title = element_text(size=8), axis.title = element_text(size=6.5), axis.text=element_text(size=6)),
+                                               p3+guides(fill = guide_legend(override.aes = list(size = 2)))+labs(title=paste0('Sensitivity tests (', mname, ')'))+theme(legend.text = element_text(size=5.5), legend.title = element_text(size=8), axis.title = element_text(size=6.5), axis.text=element_text(size=6),text=element_text(size=0))), nrow = 2, lengths = c(0.8,0.8)))
+})
+
+  png(paste0('results/mr/combined_plots/',g ,'_egg.png'), res = 105)
+  grid.arrange(plot_list[[1]], ncol=1)
+  dev.off()
+  
+  png(paste0('results/mr/combined_plots/',g ,'_wm.png'), res = 105)
+  grid.arrange(plot_list[[2]], ncol=1)
+  dev.off()
+  
+  if(length(plot_list)==3){
+  png(paste0('results/mr/combined_plots/',g ,'_ivw.png'), res = 105)
+  grid.arrange(plot_list[[3]], ncol=1)
+  dev.off()
+}
+})
+
+save.image('saved_objects/PLOTS.RData')
+```
+
+
+Calculate the F-statistic and determine if there are valuable comparisons
+```{r}
+all_res$
+```
+
+
+
+
+# Run sensitivity and quality plots
+```{r}
+method_nomenclature = setNames(c('IVW', 'WM', 'Egger'),c("Inverse variance weighted", "Weighted median", "MR Egger"))
+g=unique(all_res$group)[1]
+
+for (g in unique(all_res$group)){
+  print(paste0('GROUP: ', g))
+
+all_res_m = all_res %>%    
+    dplyr::filter(group==g) %>%
+    dplyr::mutate(exposure=simplifyNameFiles(exposure)) %>%
+    dplyr::mutate(pval= p.adjust(pval, 'fdr')) %>%
+    dplyr::mutate(`Causal effect estimate`= ifelse(pval<0.1, b, NA)) %>%
+    dplyr::mutate(outcome=simplifyNameFiles(outcome),
+                  m = method_nomenclature[method]) %>%
+  dplyr::mutate(outcome.method = paste0(outcome, '     ', m, '')) %>%
+  dplyr::mutate(beta =`Causal effect estimate`) %>%
+  dplyr::mutate(Het.label = ifelse(Q_pval.adj<0.05, 'H', ''), 
+                    Plt.label = ifelse(plt_pval.adj<0.05, 'P', ''),
+                    Dir.label = ifelse(steiger_pval.adj>0.05, 'D', '')) %>%
+  dplyr::mutate(Het.label = ifelse(is.na(Het.label), '', Het.label), 
+                    Plt.label = ifelse(is.na(Plt.label), '', Plt.label),
+                    Dir.label = ifelse(is.na(Dir.label), '', Dir.label),
+                    plt_pval.adj<0.05, 'P', '') %>%
+  dplyr::mutate(Label = paste0(Het.label, Plt.label, Dir.label)) %>% 
+  dplyr::filter(!is.na(method)) %>%
+  dplyr::mutate()
+
+
+extreme_vals = c(floor(min(all_res_m$beta,na.rm=T)), ceiling(max(all_res_m$beta, na.rm=T)))
+
+  ggplot(all_res_m, aes(x=exposure, y=outcome.method), label=Label) +
+        geom_tile(aes(fill= beta), colour='gray100', size=0.25, lwd=0.3, linetype=1)+
+        scale_y_discrete(expand=c(0,0))+
+        labs(x='', y='',fill='Effect\nsize', 
+             title = paste0('Heatmap of the significant causal effect estimates for ', g))+
+        theme_classic()+
+        theme(legend.position = "right",
+              legend.justification = 'center',
+          legend.title = element_text( vjust=0.5, hjust=0.5, family = 'Times'),
+          axis.text = element_text(family = "Times", size=6.5),
+          axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+          axis.ticks = element_line(size=0.2),
+          axis.title=element_text(face='bold', size=7.5),
+          axis.line=element_line(colour='gray100'),
+          plot.background = element_blank(),
+          panel.border = element_blank(),
+          plot.title = element_text(
+            family = "Times",
+            face = "bold",
+            size = 9, hjust = 0.5, vjust = 0.5,
+            margin = margin(b = 10)))+
+        labs(x='Exposure trait', y='Outcome trait')+
+        geom_text(aes(label=Label), color='black', size=1.8)+
+        coord_fixed(ratio = 0.38/1)+
+        guides(fill=guide_colorbar(barwidth = 0.8, barheight = 10, ticks = F,label.vjust = 1))+
+       scale_fill_gradientn(na.value = 'gray65', 
+                       limits = c(extreme_vals[1], extreme_vals[2]),
+                       breaks = c(extreme_vals[1], 0, extreme_vals[2]),
+                       colours = c("skyblue4","slategray1", "white", 'lightpink2', "red3"), 
+                       values = c(0, scales::rescale( c(extreme_vals[1],-0.1,0,0.1,extreme_vals[2]), from = extreme_vals), 1),
+                       labels = c(extreme_vals[1], 0, extreme_vals[2]))    
+      ggsave(filename = paste0('results/mr/', g,'/HM_', g, '_ALL2.png'),device = 'png',dpi = 320)
+}
+```
+
+
+# Make intersting calculations of the results
+```{r}
+write.xlsx(all_res %>% dplyr::select(exposure, outcome, method, b), 'results/25_pheno_Normal/MR_res.xlsx')
+all_resres = all_res %>%
+  dplyr::mutate(exposure=simplifyNameFiles(exposure)) %>%
+    dplyr::mutate(pval= p.adjust(pval, 'fdr')) %>%
+    dplyr::mutate(`Causal effect estimate`= ifelse(pval<0.1, b, NA)) %>%
+    dplyr::mutate(outcome=simplifyNameFiles(outcome),
+                  m = method_nomenclature[method]) %>%
+  dplyr::mutate(outcome.method = paste0(outcome, '     ', method, '')) %>%
+  dplyr::mutate(beta =`Causal effect estimate`) %>%
+  dplyr::mutate(Het.label = ifelse(Q_pval.adj<0.05, 'H', ''), 
+                    Plt.label = ifelse(plt_pval.adj<0.05, 'P', ''),
+                    Dir.label = ifelse(steiger_pval.adj>0.05, 'D', '')) %>%
+  dplyr::mutate(Het.label = ifelse(is.na(Het.label), '', Het.label), 
+                    Plt.label = ifelse(is.na(Plt.label), '', Plt.label),
+                    Dir.label = ifelse(is.na(Dir.label), '', Dir.label),
+                    plt_pval.adj<0.05, 'P', '') %>%
+  dplyr::mutate(Label = paste0(Het.label, Plt.label, Dir.label)) %>%
+  dplyr::mutate(age = gsub('(.*) (.*)', '\\1', exposure), 
+                sex = gsub('(.*) (.*)', '\\2', exposure))
+
+
+all_resres %>% group_by(group) %>% 
+  dplyr::filter(Het.label=='H') %>%
+  summarise(n.sign=n())
+```
+
+
+
+
+
+
+# Make a forest plot of the relevant results
+
+```{r}
+# Create a data frame with the study labels, effect estimates, and standard errors (SE)
+forest_data <- data.frame(
+  study = c("Study 1", "Study 2", "Study 3", "Study 4"),
+  estimate = c(0.75, 1.20, 0.90, 0.95),
+  se = c(0.05, 0.10, 0.07, 0.08),
+  sex = c("Male", "Female", "Male", "Female")
+)
+
+# Create your forest data selecting the interesting results and making 
+forest_data = all_res %>%
+  dplyr::filter((outcome=='Triglyceride levels' & 
+                method=='Weighted median') | (outcome=='Educational attainment (years of education)' & 
+                method=='Weighted median') | (outcome=='Heart failure' &
+                method=='MR Egger'))
+
+# Include age and sex
+forest_data$age = gsub('(.*)_([bfm].*)','\\1',forest_data$exposure)
+forest_data$sex = gsub('(.*)_([bfm].*)','\\2',forest_data$exposure)
+
+# Calculate the confidence intervals (CI) from the standard errors (SE)
+forest_data$lower_ci <- forest_data$b - 1.96 * forest_data$se.x
+forest_data$upper_ci <- forest_data$b + 1.96 * forest_data$se.x
+
+# Define the male and female symbols
+male_symbol <- "\u2642"  # Unicode for male symbol
+female_symbol <- "\u2640"  # Unicode for female symbol
+both_symbol <- "\u2295"  # Unicode for circle symbol
+
+# Define the plot
+ggplot(forest_data, aes(x = b, y = outcome, color=age)) +
+  #geom_point(size = 5, shape = ifelse(forest_data$sex == "male", male_symbol,ifelse(forest_data$sex == "female", female_symbol, both_symbol)))  +
+  geom_point(size = 2)  +
+  geom_errorbarh(aes(xmin = lower_ci, xmax = upper_ci), height = 0.3) +
+  geom_vline(xintercept = 0, linetype = "dashed") +
+  xlim(c(-1.2,1.2))+
+  scale_x_continuous(labels=c(-1,0,1), breaks=c(-1,0,1))+
+  xlab("Effect Estimate") +
+  ylab("Study") +
+  theme_void(base_family = 'Times')+  
+  theme(
+    axis.text = element_text(size = 10),  # Adjust the font size of axis text
+    text = element_text(face = "bold")  # Make all text in the plot bold
+  )+
+  facet_wrap(~age, nrow = 1)
+forest_data
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Consider running MR PRESSO
+```{r}
+relationsWithPleiotropy = mr_plt %>%
+  filter(pval<0.05) %>% 
+  mutate(contrast = paste0(exposure,'.', outcome)) %>%
+  pull(contrast)
+
+causalityIdentified = mr_res %>% 
+  filter(method=='MR Egger', pval<0.05) %>% 
+  mutate(contrast = paste0(exposure,'.', outcome)) %>%
+  pull(contrast)
+
+
+ContrastsNeedingBetterTest = intersect(causalityIdentified, relationsWithPleiotropy)
+
+mr_res %>% dplyr::filter(exposure=="Adult_female", outcome=="Predicted visceral adipose tissue", method=='MR Egger')
+
+# Run over those positive results with identified pleiotropy the MR-PRESSO 
+harm_contrasts.needing.better.test = harm_df2 %>%
+  dplyr::filter(paste0(exposure, '.', outcome) %in% ContrastsNeedingBetterTest[c(8)])
+
+res_presso = run_mr_presso(harm_contrasts.needing.better.test,NbDistribution = 500, SignifThreshold = 0.05)
+
+presso_mtx = harm_contrasts.needing.better.test %>% group_by(exposure, outcome) %>% summarise(n_t = n()) %>% 
+  mutate(contrast = paste0(exposure, '.', outcome),
+         ) %>% column_to_rownames('contrast') %>% as.matrix()
+
+saveRDS(list.presso, 'saved_objects/list.presso1.RDS')
+st=Sys.time()
+save.image('08_05_2023_mr2.RData')
+
+list.presso3 = lapply(ContrastsNeedingBetterTest1, function(contrast){
+  contrast = strsplit(contrast, '\\.')[[1]]
+  
+  harm_presso = harm_df2 %>% 
+   dplyr::filter(exposure==contrast[1], outcome==contrast[2])
+  
+   res_presso = run_mr_presso(harm_presso, NbDistribution = 5000)
+  
+  ind_outliers = res_presso[[1]]$`MR-PRESSO results`$`Distortion Test`$`Outliers Indices`
+  outliers = harm_df2[ind_outliers,]$SNP
+  res_presso = res_presso[[1]]$`Main MR results` %>% as.data.frame() %>%
+    mutate(outliers = c(length(outliers), paste0(outliers, collapse=',')),
+           exposure=contrast[1], 
+           outcome=contrast[2])
+  return(res_presso)
+})
+
+df.presso = list.presso %>% 
+  rbindlist() 
+
+
+# 5) Save the relevant results into the matrices. Make a matrix for posterior representaiton
+saveRDS(mr_res, 'saved_objects/mr_res.RDS')
+```
+
+
+
+
+
+Funnel plotting
+```{r}
+fun_plots = mr_funnel_plot(mr_single_res)
+
+
+mr_single_res3 = mr_single_res2 %>%
+   dplyr::mutate(combination = paste0(exposure,'.',outcome))
+
+
+# Edit the plots to make them more beautiful
+fun_plots2 = lapply(names(fun_plots), function(name_plot){
+  # Get the names of the exposure and the outcome
+  outcome = simplifyNameFiles(str_split(name_plot, '\\.',2)[[1]][2])
+  exposure = gsub('_',' ', gsub(paste0('.',outcome), '', name_plot))
+  iprop = mr_single_res3[mr_single_res3$combination==name_plot,]$valid_instruments
+  iprop = round(iprop*100, 0)
+  
+  # Develop the new adapted plots
+  fun_plots[[name_plot]] +
+    theme_classic()+
+    theme(legend.position='none', 
+          text = element_text(family='Times', size=6.5), axis.text = element_text(size=6.5),
+      plot.title = element_text(hjust=0.5,family = 'Times', face='bold', size=8), 
+    plot.subtitle = element_text(hjust=0.5, family='Times', size=6.5, color=ifelse(iprop>50, 'darkgreen', 'red4')))+
+    labs(title=paste0(output),
+         subtitle = paste0(iprop, '% significant instruments'))+
+    aes(stroke=0.1)+
+    labs(title=paste0(exposure, '-', outcome))
+})
+names(fun_plots2) = names(fun_plots)
+
+outcomes_plots = gsub('^[AC][dh].*_([a-zA-Z]*)\\.(.*)', '\\2', names(fun_plots2))
+sex_plots =  gsub('^[AC][dh].*_([a-zA-Z]*)\\.(.*)', '\\1', names(fun_plots2))
+
+
+fun_plots2 = fun_plots2[order(outcomes_plots, sex_plots)]
+ordered_funplots = lapply(unique(outcomes_plots), function(outcome_plot){
+  outcome_funplots = fun_plots2[endsWith(x = names(fun_plots2), suffix = outcome_plot)]
+  out_plots = arrangeGrob(grobs=outcome_funplots, layout_matrix = matrix(1:9, ncol=3, nrow=9/3, byrow = T))
+  
+  p = grid.arrange(out_plots, nrow=1)
+  ggsave(filename = paste0('results/mr/sensitivity_plots/funnel_plots/', outcome_plot, '.png'), 
+         plot = p, device = 'png')
+  })
+```
+
+
+# Scatter plots
+```{r}
+# Make the plots and prepare divide by sex and outcomes
+sca_plots = mr_scatter_plot(mr_res, harm_df2)
+
+
+
+# Find pleiotropy detections
+all_res$combination = paste0(all_res$exposure,'.',all_res$outcome)
+plt.sign = all_res %>% dplyr::filter(combination==names(sca_plots)[1],
+                          method=='MR Egger') %>% pull(plt_pval.adj)
+
+sca_plots2 = lapply(names(sca_plots), function(name_plot){
+  # Get the names of the exposure and the outcome
+  output = simplifyNameFiles(str_split(name_plot, '\\.',2)[[1]][2])
+  plt.sign = all_res %>% dplyr::filter(combination==names(sca_plots)[1],
+                          method=='MR Egger') %>% pull(plt_pval.adj)
+  plei = ifelse(plt.sign<0.05, 'Significant pleiotropy detected', '')
+  
+  # Develop the new adapted plots
+  sca_plots[[name_plot]] +
+    theme_classic(base_family = 'Times', base_size = 6.5)+
+    theme(legend.position='none', 
+          text = element_text(family='Times', size=6.5),
+      plot.title = element_text(hjust=0.5,family = 'Times', face='bold', size=8), 
+    plot.subtitle = element_text(hjust=0.5, family='Times', size=6.5, color=ifelse(nchar(plei)==0, 'darkgreen', 'red4')))+
+    aes(stroke=0.1)+
+    labs(title=paste0(output),
+         subtitle = plei,
+         y='SNP effect outcome')
+})
+names(sca_plots2) = names(sca_plots)
+
+
+outcomes_plots = gsub('^[AC][dh].*_([a-zA-Z]*)\\.(.*)', '\\2', names(sca_plots2))
+sex_plots =  gsub('^[AC][dh].*_([a-zA-Z]*)\\.(.*)', '\\1', names(sca_plots2))
+
+
+sca_plots2 = sca_plots2[order(outcomes_plots, sex_plots)]
+ordered_funplots = lapply(unique(outcomes_plots), function(outcome_plot){
+  outcome_scaplots = sca_plots2[endsWith(x = names(sca_plots2), suffix = outcome_plot)]
+  out_plots = arrangeGrob(grobs=outcome_scaplots, layout_matrix = matrix(1:9, ncol=3, nrow=9/3, byrow = T))
+  
+  p = grid.arrange(out_plots, nrow=1)
+  ggsave(filename = paste0('results/mr/sensitivity_plots/scatter_plots/', outcome_plot, '.png'), 
+         plot = p, device = 'png')
+  })
+```
+
+
+
+
+
+
+
+
+
+
+
+
+# Try lhcMR to relate the exposures
+```{r}
+install_github("GenomicSEM/GenomicSEM")
+library(lhcMR)
+library(GenomicSEM)
+lhcMR::
+
+ld_rho = vroom('programs/lhcmr/LD_GM2_2prm.csv')
+ld_f = vroom('programs/lhcmr/LDscores_filtered.csv')
+
+
+head(ld_f)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+NAVMIX
+```{r}
+library(navmix)
+
+# Create summary statistics matrices
+B_mtx = matrix(NA, length(unique(outcome_dfs$SNP)), length(unique(outcome_dfs$DATA)), 
+               dimnames = list(unique(outcome_dfs$SNP), unique(outcome_dfs$DATA)))
+
+S_mtx = matrix(NA, length(unique(outcome_dfs$SNP)), length(unique(outcome_dfs$DATA)), 
+               dimnames = list(unique(outcome_dfs$SNP), unique(outcome_dfs$DATA)))
+
+SE_mtx = matrix(NA, length(unique(outcome_dfs$SNP)), length(unique(outcome_dfs$DATA)), 
+               dimnames = list(unique(outcome_dfs$SNP), unique(outcome_dfs$DATA)))
+
+# Calculate the standard deviation with the SE and the sample size
+outcome.SD = outcome_dfs$SE * sqrt(as.numeric(ext_traits$Sample_size[match(outcome_dfs$DATA, ext_traits$Trait)]))
+
+B_mtx[cbind(outcome_dfs$SNP, outcome_dfs$DATA)] = outcome_dfs$BETA
+S_mtx[cbind(outcome_dfs$SNP, outcome_dfs$DATA)] = outcome.SD
+SE_mtx[cbind(outcome_dfs$SNP, outcome_dfs$DATA)] = outcome_dfs$SE
+
+# Make a proper adjustment and perform navmix clustering
+B_std = B_mtx/S_mtx
+
+nav_res3 = navmix(B_std, K = 3, pj_ini = 0)
+nav_res9 = navmix(B_std, K = 9, pj_ini = 0)
+nav_resK = navmix(B_std, pj_ini = 0)
+# nav_res3b = navmix(B_mtx, pj_ini = 0, K=3)
+navmix::par_plot()
+nav_res = nav_res3
+# Seggregate rsids based on cluster-probability results (fit$g)
+# Make the navmix clustering to separate the rsids based on their cluster-probability
+clusters_df = data.table(cluster=colnames(nav_res$fit$g)[apply(nav_res$fit$g, 1, which.max)],
+                         rsid=rownames(nav_res$fit$g))
+clusters_df = merge(clusters_df, data.frame(rsid=df.comb$SNP, age=df.comb$age, sex=df.comb$sex), by='rsid', all=T)
+```
+
+
+```{r}
+cluster.counts = clusters_df %>%
+  add_count(age, name = "age.count") %>%
+  add_count(cluster, name="cluster.count") %>%
+  group_by(cluster, age, age.count, cluster.count) %>%
+  reframe(total = n() )
+
+# Clusters by proportions
+cluster.counts %>%
+  dplyr::mutate(prop.age = total/age.count)%>%
+  arrange(-prop.age) %>%
+ggplot(aes(cluster, prop.age, fill=age, width=1.1))+
+  geom_bar(position= position_dodge(preserve = 'single', width = 0), stat='identity',
+           color='gray40', size=0.4)+
+  theme_classic()+
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        text = element_text(family = 'Times', size=12),
+        legend.title = element_text(),
+        plot.title = element_text(hjust=0.5),
+       strip.background=element_blank())+
+  labs(title='Age-stage lead SNPs proportion in each cluster', fill='Age stage', 
+       x='Cluster of lead SNPs', y='Proportion')+
+    scale_fill_manual(values=color_vr)
+  #geom_text(aes(label=ifelse(top.bars.in.plot, go, '')), vjust=-2, color='gray20', size=3, family='Times')+
+  # geom_text(aes(label=ifelse(top.bars.in.plot & cluster %in% sigfuns.clusters$cluster, paste0(n_sign,'*'), '')),vjust=-0.5, color='gray20',size=3, family='Times', face='bold', angle=0)+
+
+
+# Clusters by age-counts
+cluster.counts %>%
+   arrange(-total) %>%
+ggplot(aes(x=cluster, y=total, fill=age, width=1.1))+
+  geom_bar(position= position_dodge(preserve = 'single', width = 0.5), stat='identity',
+           color='gray40', size=0.4)+
+  theme_classic()+
+    theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1),
+        text = element_text(family = 'Times', size=12),
+        legend.title = element_text(),
+        plot.title = element_text(hjust=0.5),
+       strip.background=element_blank())+
+  labs(title='Age-stage lead SNPs distribution in each cluster\ngenerated with outcomes´ statistics', fill='Age stage', 
+       x='Cluster', y='Total instruments')+
+    scale_fill_manual(values=color_vr)
+
+```
+
+
+
+
+
+# Do all MR plots
+```{r}
+
+make_MR_plots = function(mr_res){
+# ALL INDIVIDUAL PLOTS FOR MR
+for (m in unique(mr_res$method) ){
+  print(m)
+  mr_res_plots = mr_res %>%
+    dplyr::filter(method==m,
+                  outcome %in% ext_traits$Trait) %>%
+    dplyr::mutate(pval= p.adjust(pval, 'fdr')) %>%
+    dplyr::mutate(`Causal effect estimate`= ifelse(pval<0.05, b, NA) ) 
+  
+  # Run on the beta estimate and sgnificant beta estimates
+    for (b.est in c('b', 'Causal effect estimate')){
+      p = mr_res_plots %>% 
+        dplyr::mutate(b.est = pull(mr_res_plots, b.est) ) %>%
+        ggplot(aes(exposure, outcome)) +
+        geom_tile(aes(fill= b.est), colour='gray100', size=0.25, lwd=0.3, linetype=1)+
+        scale_fill_gradient2(na.value='gray65', low = "darkblue", mid='#33008314', high = "darkred", midpoint=0)+
+        scale_y_discrete(expand=c(0,0))+
+        labs(x='', y='',fill='Causal\neffect\n', 
+             title = paste0('Heatmap of the exposure-outcome\nsignificant causal effects \non ',m))+
+        theme_classic()+
+        theme(legend.position = "right",
+              legend.justification = 'center',
+          legend.title = element_text( vjust=0.5, hjust=0.5, family = 'Times'),
+          axis.text = element_text(family = "Times", size=9),
+          axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+          axis.ticks = element_line(size=0.2),
+          axis.line=element_line(colour='gray100'),
+          plot.background = element_blank(),
+          panel.border = element_blank(),
+          plot.title = element_text(
+            family = "Times",
+            face = "bold",
+            size = 10.2, hjust = 0.5, vjust = 0.5,
+            margin = margin(b = 10)))+
+        coord_fixed(ratio = 0.38/1)+
+        guides(fill=guide_colorbar(barwidth = 0.8, barheight = 10, ticks = F,label.vjust = 1)) 
+      p
+      ggsave(paste0('results/mr/','HM_', b.est, '_', m, '.png'))
+      
+    }
+  
+    png(paste0('results/mr/','HM_pvalFDR_', m, '.png'))
+    mr_res_plots %>% 
+        ggplot(aes(exposure, outcome)) +
+        geom_tile(aes(fill= pval), colour='gray100', size=0.25, lwd=0.3, linetype=1)+
+        scale_fill_gradient(limits=c(0,1), high = 'lightblue', low='purple')+
+        scale_y_discrete(expand=c(0,0))+
+        labs(x='', y='',fill='P-value\nFDR adjusted\n', 
+             title = paste0('Heatmap of the exposure-outcome\nsignificant causal effects \non ',m))+
+        theme_classic()+
+        theme(legend.position = "right",
+              legend.justification = 'center',
+          legend.title = element_text( vjust=0.5, hjust=0.5, family = 'Times'),
+          axis.text = element_text(family = "Times", size=9),
+          axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+          axis.ticks = element_line(size=0.2),
+          axis.line=element_line(colour='gray100'),
+          plot.background = element_blank(),
+          panel.border = element_blank(),
+          plot.title = element_text(
+            family = "Times",
+            face = "bold",
+            size = 10.2, hjust = 0.5, vjust = 0.5,
+            margin = margin(b = 10)))+
+        coord_fixed(ratio = 0.38/1)+
+        guides(fill=guide_colorbar(barwidth = 0.8, barheight = 10, ticks = F,label.vjust = 1))
+    dev.off()
+    
+     png(paste0('results/mr/','HM_instruments_', m, '.png'))
+    mr_res_plots %>% 
+        ggplot(aes(exposure, outcome)) +
+        geom_tile(aes(fill= pval), colour='gray100', size=0.25, lwd=0.3, linetype=1)+
+        scale_fill_gradient(limits=c(0,1), high = 'lightblue', low='purple')+
+        scale_y_discrete(expand=c(0,0))+
+        labs(x='', y='',fill='P-value\nFDR adjusted\n', 
+             title = paste0('Heatmap of the exposure-outcome\nsignificant causal effects \non ',m))+
+        theme_classic()+
+        theme(legend.position = "right",
+              legend.justification = 'center',
+          legend.title = element_text( vjust=0.5, hjust=0.5, family = 'Times'),
+          axis.text = element_text(family = "Times", size=9),
+          axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+          axis.ticks = element_line(size=0.2),
+          axis.line=element_line(colour='gray100'),
+          plot.background = element_blank(),
+          panel.border = element_blank(),
+          plot.title = element_text(
+            family = "Times",
+            face = "bold",
+            size = 10.2, hjust = 0.5, vjust = 0.5,
+            margin = margin(b = 10)))+
+        coord_fixed(ratio = 0.38/1)+
+        guides(fill=guide_colorbar(barwidth = 0.8, barheight = 10, ticks = F,label.vjust = 1))
+    dev.off()
+    
+  }
+}
+```
+
+```{r}
+# P
+for (m in unique(mr_res$method) ){
+  print(m)
+  png(paste0('results/','HM_bsign_', m, '.png'))
+  mr_res %>%
+    dplyr::filter(method==m,
+                  outcome %in% df.outcomes$Trait) %>%
+    dplyr::mutate(pval= p.adjust(pval, 'fdr')) %>%
+    dplyr::mutate(`Causal effect estimate`= ifelse(pval<0.05, b, NA) ) %>%
+    ggplot(., aes(exposure, outcome)) +
+    geom_tile(aes(fill=`Causal effect estimate`), colour='gray100', size=0.25, lwd=0.3, linetype=1)+
+    scale_fill_gradient2(na.value='gray65', low = "darkblue", mid='#33008314', high = "darkred", midpoint=0, limits=c(-4,4))+
+    scale_y_discrete(expand=c(0,0))+
+    labs(x='', y='',fill='Causal\neffect\n', title = 'Heatmap of the exposure-outcome significant causal effects')+
+    theme_classic()+
+    theme(legend.position = "right",
+          legend.justification = 'center',
+      legend.title = element_text( vjust=0.5, hjust=0.5, family = 'Times'),
+      axis.text = element_text(family = "Times", size=9),
+      axis.text.x = element_text(angle=50, hjust = 1, vjust = 1),
+      axis.ticks = element_line(size=0.2),
+      axis.line=element_line(colour='gray100'),
+      plot.background = element_blank(),
+      panel.border = element_blank(),
+      plot.title = element_text(
+        family = "Times",
+        face = "bold",
+        size = 10.2, hjust = 0.5, vjust = 0.5,
+        margin = margin(b = 10)))+
+    coord_fixed(ratio = 0.38/1)+
+    guides(fill=guide_colorbar(barwidth = 0.8, barheight = 10, ticks = F,label.vjust = 1))
+dev.off()
+}
+```
+
+
+
+
+```{r}
+df0 = vroom('data/initial_final/Adult_both.txt.gz')
+for (f in list.files('data/gwasc_final/', full.names = T)){
+  df = vroom(file = f)
+  print(f)
+  if(!'EAF' %in% colnames(df) & getFileNames(f) %in% info_mtx$Trait){
+    #df$NEA = df0$NEA[match(df$SNP, df0$SNP)]
+    #df$EA = df0$EA[match(df$SNP, df0$SNP)]
+    df$EAF = df0$EAF[match(df$SNP, df0$SNP)]
+    #df$sample_size = as.numeric(info_mtx$Sample_size[info_mtx$Trait==getFileNames(f)])
+    
+    fwrite(df, f)
+  }
+}
+
+```
+
+
+
+
+
+Clean if they need to
+```{r}
+d1 = vroom("data/gwasc_final/Stroke.txt.gz", show_col_types = F)
+d0 = vroom("data/gwasc_clean/Stroke.txt.gz")
+lacking_snps = a1 %>% dplyr::filter(!is.na(proxy)) %>% select(SNP, proxy, BETA, EA)
+sum(is.na(a0$BETA))
+
+a1 %>% dplyr::filter(SNP==snp)
+a0 %>% dplyr::filter(SNP=="rs1405354")
+a0 %>% dplyr::filter(SNP=="rs1045529")
+
+snpStats::ld(geno_panel$genotypes[,missing_snps$SNP], 
+               geno_panel$genotypes[,'rs2222685'], 
+               stats='R')
+
+# Identify the present and missing SNPs
+present_snps = a1 %>% dplyr::filter(is.na(proxy)) 
+missing_snps = a1 %>% dplyr::filter(!is.na(proxy)) 
+
+
+
+  # Identify missing SNPs and find LD-proxies
+  LD_proxies_rsids = sapply(missing_snps$SNP, function(snp){
+    ldcorr = listLD_leadSNPs[[snp]] 
+    ldcorr[names(ldcorr) %in% a0$SNP][1]
+  }, USE.NAMES = F)
+  
+  
+  # Substitute the information and get the rows
+  LD_proxies_snps = a0[match(names(LD_proxies_rsids), a0$SNP),] %>% 
+    mutate(r = LD_proxies_rsids, 
+           proxy = SNP) %>% 
+    mutate(SNP = missing_snps$SNP, 
+           EA=missing_snps$EA)
+  
+  
+  if (nrow(present_snps)>0){
+     final_df = dplyr::bind_rows(as.data.frame(present_snps), LD_proxies_snps) %>%
+    dplyr::select(SNP, EA, BETA, SE, P, r, proxy) %>%
+    arrange(SNP) %>% dplyr::filter(!)
+  }
+  if (length(missing_snps)==0){
+    final_df = present_snps
+  }
+  if (nrow(present_snps)==0){
+    final_df = LD_proxies_snps
+  }
+  
+  fwrite(final_df, paste0(f))
+```
+
+
+```{r}
+
+lead_snps = data.frame(SNP=d1$SNP, EA=d1$EA)
+file.exists(paste0('data/gwasc_final/',ext_traits$Trait, '.txt.gz'))
+for (f in paste0(ext_traits$Trait, '.txt.gz')[13:32]){
+  if(f=='Heart rate variability traits (pvRSA/HF).txt.gz'){
+    f='Heart rate variability traits (pvRSA_HF).txt.gz'
+  }
+
+  d1 = vroom(paste0('data/gwasc_final/', f), show_col_types = F)
+  print(f)
+  print(nrow(d1))
+  
+  d0 = vroom(paste0('data/gwasc_clean/', f), show_col_types = F)
+  d0 = na.omit(d0)
+  
+  
+  predict  = d1%>% dplyr::filter(!is.na(proxy)) %>% tail() %>% .[1,]
+  if (is.na(predict$SNP)){next}
+  ld_predict = snpStats::ld(geno_panel$genotypes[,predict$SNP], 
+               geno_panel$genotypes[,predict$proxy], 
+               stats='R')
+  
+  if( as.numeric(ld_predict)-as.numeric(predict$r)<1e-5 ){next}
+  print('Not equal LD')
+  
+  
+  present_snps = d0[paste0(d0$SNP, d0$EA) %in% paste0(lead_snps$SNP, lead_snps$EA),]
+  missing_snps = setdiff(lead_snps$SNP, present_snps$SNP)
+  missing_ea = d1$EA[match(missing_snps, d1$SNP)]
+  
+  # Identify missing SNPs and find LD-proxies
+  LD_proxies_rsids = sapply(missing_snps, function(snp){
+    ldcorr = listLD_leadSNPs[[snp]] 
+    ldcorr[names(ldcorr) %in% d0$SNP][1]
+  }, USE.NAMES = F)
+  
+  # Substitute the information and get the rows
+  LD_proxies_snps = d0[match(names(LD_proxies_rsids), d0$SNP),] %>% 
+    mutate(r = LD_proxies_rsids, 
+           proxy = SNP) %>% 
+    mutate(SNP = missing_snps, 
+           EA=missing_ea)
+  
+  if (nrow(present_snps)>0){
+     final_df = dplyr::bind_rows(as.data.frame(present_snps), LD_proxies_snps) %>%
+    dplyr::select(SNP, EA, BETA, SE, P, r, proxy) %>%
+    arrange(SNP) 
+  }
+  if (length(missing_snps)==0){
+    final_df = present_snps
+  }
+  if (nrow(present_snps)==0){
+    final_df = LD_proxies_snps
+  }
+  print(sum(is.na(final_df$BETA)))
+  final_df$sample_size = as.numeric(ext_traits[ext_traits$Trait==getFileNames(f),]$Sample_size)
+  fwrite(x = final_df, paste0('data/gwasc_final/',f))
+}
+```
+
+```{r}
+for (f in paste0(ext_traits$Trait, '.txt.gz')[30:31]){
+  
+  if(f=='Heart rate variability traits (pvRSA/HF).txt.gz'){
+    f='Heart rate variability traits (pvRSA_HF).txt.gz'
+  }
+  
+  d0 = vroom(paste0('data/gwasc_clean/', f), show_col_types = F)
+  d1 = vroom(paste0('data/gwasc_final/', f), show_col_types = F)
+  proxies = d1 %>% filter(!is.na(proxy)) %>% select(SNP, proxy, r)
+  
+  snpStats::ld(geno_panel$genotypes[,"rs117162474"], 
+               geno_panel$genotypes[,"rs79849140"], 
+               stats='R')
+  
+  snpStats::ld(geno_panel$genotypes[,LD_proxies_s], 
+               geno_panel$genotypes[,proxies$proxy[nrow(proxies)]], 
+               stats='R')
+  
+  proxies[nrow(proxies),]
+  proxies$SNP[nrow(proxies)]
+  proxies$proxy[nrow(proxies)]
+  tt=listLD_leadSNPs[[proxies$SNP[nrow(proxies)]]]
+  tt[names(tt)==proxies$proxy[nrow(proxies)]]
+  ld()
+}
+```
+
+
+
+
+
+## Drawing DAGs
+
+```{r}
+#  set theme of all DAGs to `theme_dag()`
+library(ggdag)
+library(ggplot2)
+theme_set(theme_dag())
+
+dag <- dagify(ChildBT ~ SNPc+Uc,
+              AdultBT ~ SNPa+Ua,
+              ChildAdultBTV ~ SNPca+Uca,
+              Outcome ~ SNPc+SNPa+SNPca+ChildBT+AdultBT+ChildAdultBT+Ua+Uca+Uc,
+              labels = c(),
+              latent = c('SNPc','SNPa','SNPca'),
+              exposure = c('ChildBT', 'AdultBT', 'ChildAdultBTV'),
+              outcome = c("Outcome","Outcome","Outcome")
+)
+
+dag <- dagify(Outcome ~ SNPc+SNPa
+)
+ggdag::
+simple_dag <- dagify(
+  y ~ x + a + b,
+  x ~ a + b,
+  exposure = "x",
+  outcome = "y"
+)
+set.seed(1)
+dag=dagify(y ~ x, exposure='x', outcome='y')
+  ggdag(dag)
+  
+ggdag(simple_dag)
+```
+
+```{r}
+library(ggdag)
+library(dagitty)
+dag <- dagitty::dagitty("dag {
+    y <- x <- z1 <- v -> z2 -> y
+    z1 <- w1 <-> w2 -> z2
+    x <- w1 -> y
+    x <- w2 -> y
+    x [exposure]
+    y [outcome]
+  }")
+
+
+dag <- dagitty::dagitty("dag {
+    y <- x <- z1 <- v -> z2 -> y
+    z1 <- w1 <-> w2 -> z2
+    x <- w1 -> y
+    x <- w2 -> y
+    x [exposure]
+    y [outcome]
+  }")
+
+
+tidy_dag <- tidy_dagitty(dag)
+tidy_ggdag <- dagify(
+  y ~ x + z2 + w2 + w1,
+  x ~ z1 + w1 + w2,
+  z1 ~ w1 + v,
+  z2 ~ w2 + v,
+  w1 ~ ~w2, # bidirected path
+  exposure = "x",
+  outcome = "y"
+) %>%
+  tidy_dagitty()
+
+ggdag(tidy_ggdag) +
+  theme_dag()
+
+
+dag <- dagitty::dagitty("dag{
+  Exposure -> Outcome
+  Exposure -> Instrument
+  Confounder -> Exposure
+  Confounder -> Outcome
+  Exposure [exposure]
+  Outcome [outcome]
+  }"
+)
+
+ggdag(dag) +
+  theme_dag()
+  geom_dag_edgetext(aes(label = label), size = 4) +
+  theme_dag()
+```
+
+
+
+
+```{r}
+library(dagitty)
+library(ggdag)
+library(dplyr)
+
+# Define the DAG
+dag <- dagitty('dag{
+                Exposure1 -> Outcome
+                Exposure2 -> Outcome
+                Exposure3 -> Outcome
+                "IV-Child" -> Exposure1
+                "IV-ChildAdult"  -> Exposure2
+                "IV-Adult"  -> Exposure3
+                Confounder1  -> Exposure1
+                Confounder2 -> Exposure2
+                Confounder3  -> Exposure3
+                Confounder1 -> Outcome
+                Confounder2 -> Outcome
+                Confounder3 -> Outcome
+                "IV-Child" -> Confounder1
+                "IV-ChildAdult"  -> Confounder2
+                "IV-Adult"  -> Confounder3
+                "IV-Child" -> Outcome
+                "IV-ChildAdult"  -> Outcome
+                "IV-Adult"  -> Outcome
+              }')
+
+# Assign labels and colors
+node_labels <- c("Child-BT", "ChildAdult-BTV", "Adult-BT")
+node_colors <- c("yellow", "green", "purple")
+
+# Extract tidy DAG data
+tidy_dag <- tidy_dagitty(dag) %>%
+  mutate(
+     colour = case_when(
+    grepl("1$", name) ~ node_colors[1],
+    grepl("2$", name) ~ node_colors[2],
+    grepl("3$", name) ~ node_colors[3],
+    grepl("Child$", name) ~ node_colors[1],
+    grepl("ChildAdult$", name) ~ node_colors[2],
+    grepl("Adult$", name) ~ node_colors[3]
+  ),
+    
+    label = case_when(
+    grepl("Exposure1$", name) ~ node_labels[1],
+    grepl("Exposure2$", name) ~ node_labels[2],
+    grepl("Exposure3$", name) ~ node_labels[3]
+  ),
+  
+    linetype = ifelse(startsWith("IV-", name) & startsWith("Confounder", to), "dashed", "solid")
+  ) %>%
+  filter(grepl('(ChildAdult$)|(2$)|(Outcome)', name)) %>%
+  filter(!to=='Confounder2' & !name=='Outcome')
+
+# Plot the DAG with interactions as dashed lines
+ggplot(tidy_dag, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_point(aes(colour = colour)) +
+  geom_dag_edges(aes(linetype = ifelse(startsWith("IV-", name) & startsWith("Confounder", to), "dashed", "solid"))) +
+  geom_label(aes(label = name), color = "black", size = 3.5, nudge_y = -0.05) +
+  scale_linetype_manual(values = c("solid", "dashed")) +
+  theme_dag() +
+  theme(legend.position = "none")
+
+
+```
+
+JUST FOR 1
+```{r}
+library(dagitty)
+library(ggdag)
+library(dplyr)
+
+# Define the DAG
+dag <- dagitty('dag{
+                Exposure -> Outcome
+                "IV"  -> Exposure
+                Confounder -> Exposure
+                Confounder -> Outcome
+              }')
+
+# Assign labels and colors
+node_labels <- c("Child-BT", "ChildAdult-BTV", "Adult-BT")
+node_colors <- c("yellow", "green", "purple")
+
+# Extract tidy DAG data
+tidy_dag <- tidy_dagitty(dag) %>%
+  mutate(
+     colour = case_when(
+    grepl("1$", name) ~ node_colors[1],
+    grepl("2$", name) ~ node_colors[2],
+    grepl("3$", name) ~ node_colors[3],
+    grepl("Child$", name) ~ node_colors[1],
+    grepl("ChildAdult$", name) ~ node_colors[2],
+    grepl("Adult$", name) ~ node_colors[3]
+  ),
+    
+    label = case_when(
+    grepl("Exposure1$", name) ~ node_labels[1],
+    grepl("Exposure2$", name) ~ node_labels[2],
+    grepl("Exposure3$", name) ~ node_labels[3]
+  ),
+  
+    linetype = ifelse(startsWith("IV-", name) & startsWith("Confounder", to), "dashed", "solid")
+  ) 
+
+# Plot the DAG with interactions as dashed lines
+ggplot(tidy_dag, aes(x = x, y = y, xend = xend, yend = yend)) +
+  geom_dag_point(aes(colour = name)) +
+  geom_dag_edges(aes(linetype = ifelse(startsWith("IV-", name) & startsWith("Confounder", to), "dashed", "solid"))) +
+  geom_label(aes(label = name), color = "black",size = 5, nudge_y = -0.05) +
+  scale_linetype_manual(values = c("solid", "dashed")) +
+  theme_dag() +
+  theme(legend.position = "none")
+ggsave('results/DAG_iamge.png', dpi = 300)
+```
+
+```{r}
+load('saved_objects/PLOTS_WITH_BMI_SPECIFIC.RData')
+
+harm_df2 %>% group_by(exposure, outcome) %>% filter() %>%
+dplyr::filter(outcome %in% c('Triglyceride levels', 'Educational attainment', 'Diastolic blood pressure'),
+                grepl('.*_both', exposure)) %>%
+  summarise(total=n())
+```
+

@@ -1,0 +1,1231 @@
+---
+title: "master_thesis"
+author: "Gerardo José Rodríguez"
+date: "2023-03-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library("fs")
+library("vroom")
+library("tidyverse")
+library('dplyr')
+library('biomaRt')
+library('openxlsx')
+library('data.table')
+library('tidyr')
+library('pheatmap')
+library('ggrepel')
+
+library("gwascat")
+library("VennDiagram")
+library("navmix")
+library("PheWAS")
+library("devtools")
+library("rvest")
+
+library("ieugwasr")
+library("genetics.binaRies")
+library(MRPRESSO)
+library(gridExtra)
+
+sesInfo = sessionInfo()
+
+```
+
+## 0) Load objects created from pre-runs of the algorithm
+```{r}
+df.comb = readRDS('saved_objects/df.comb.RDS')
+df.comb_annot = readRDS('saved_objects/df.comb_annot.RDS')
+df.traitsByGroup = readRDS('saved_objects/df.traitsByGroup.RDS')
+listLD_leadSNPs = readRDS('saved_objects/listLD_leadSNPs_w5000.RDS')
+
+# Load a genotype reference panel to use for the LD-local calculations (4 min)
+geno_panel = snpStats::read.plink(bed = 'data/genotype_data/1kg.v3/EUR.bed', 
+                                  bim = 'data/genotype_data/1kg.v3/EUR.bim', 
+                                  fam = 'data/genotype_data/1kg.v3/EUR.fam') 
+
+```
+
+## 0) Load some functions you will need 
+```{r Functions, message=FALSE, warning=FALSE, paged.print=FALSE}
+# To identify the relevant columns (SNP, EA, CHR, BP, BETA, SE, P)
+identify_SS_cols = function(df, as.index=F){
+
+  # Get a subset of random rows to make calculus faster
+  random_rows = df[sample(nrow(df), 20),]
+ 
+  # Identify the relevant columns
+  snp_col = names(df)[sapply(random_rows, is.character) & 
+                      sapply(random_rows, \(col) any(startsWith(as.character(col), 'rs')))]
+  
+  p_col = names(df)[sapply(random_rows, \(col){min(col)>=0 & min(col)<1 & max(col)<=1 & 
+      all(!is.na(as.numeric(col)))}) &
+                      grepl('P.*',toupper(names(random_rows)))]
+
+  bp_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=1 &
+                       sapply(random_rows,  \(col){max(as.numeric(col))})>1000 &
+                       sapply(random_rows, \(col){all(!is.na(as.numeric(col)))}) &
+                       grepl('^[BP]', toupper(names(df)))]
+
+  ea_col = names(df)[sapply(random_rows, \(col){any(toupper(col) %in% c('A','C','G','T'))}) & 
+                       grepl('^(EA$)|^(EFFECT_ALLELE)|^(ALLELE1)|^(A1)|^(E)|^(ALT)',
+                             toupper(names(df)))][1]
+
+  se_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=0 &
+                    sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) & 
+                    !grepl('^(STAT)',toupper(names(random_rows))) &
+                    grepl('^(SE)|^(STDERR)|^(EUR_SE)|^(ST)',toupper(names(random_rows)))][1]
+
+  chr_col = names(df)[sapply(random_rows, \(col){min(as.numeric(col))})>=1 & 
+                    sapply(random_rows, \(col){max(as.numeric(col))})<=23 &
+                    sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) &
+                    startsWith(toupper(names(random_rows)), 'CH')]
+
+  beta_col = names(df)[sapply(random_rows, \(col){any(col<0)}) &
+                       sapply(random_rows[1,], \(col){!is.na(as.numeric(col))}) & 
+                       grepl('.*[(B)(EFFECT)(OR)].*',toupper(names(random_rows)))]
+
+  
+  # Reset the new dataset format 
+  if (as.index==F){
+  return(setNames(object = c(snp_col[1], ea_col[1], chr_col[1], bp_col[1], p_col[1], beta_col[1], se_col[1]),
+                  nm = c('SNP','EA','CHR','BP','P','BETA','SE')))}
+  else{
+    indices = match(c(snp_col[1], ea_col[1], chr_col[1], bp_col[1], p_col[1], beta_col[1], se_col[1]), colnames(df))
+    return(setNames(object = indices, nm = c('SNP','EA','CHR','BP','P','BETA','SE')))
+    }
+}
+
+# From a list of SNPs return the ones that are present in the locally load plink panel 
+snps_lookup = function(snps, plink_panel, effect_alleles=NULL){
+  if (is.null(effect_alleles)){
+    return(snps[snps %in% plink_panel$map$snp.name])
+  }
+  if (!is.null(effect_alleles)){
+    return(snps[paste0(snps, effect_alleles) %in% paste0(plink_panel$map$snp.name, 
+                                              plink_panel$map$allele.1)])
+    }
+}
+
+# To load locally the correlation LD measures between a target (SNPref) with others (SNPs) 
+# based on a panel loaded with plink (snpStats::read.plink)
+getLDproxy.local = function(SNPref, SNPs, plink_panel){
+  ld_corr = snpStats::ld(plink_panel$genotypes[,SNPref], 
+               plink_panel$genotypes[,SNPs], 
+               stats='R')
+  setNames(ld_corr[which.max(abs(ld_corr))], 
+         colnames(ld_corr)[which.max(abs(ld_corr))])
+}
+
+# Return all sorted LD correlation measures of a SNP in a reference panel
+build_LD_proxy_list = function(SNPref, plink_panel, window_kb=500, LD_measure='R'){
+
+# Get the genomic location
+gloc = geno_panel$map %>% filter(snp.name==SNPref) %>%
+  select(chromosome, position) %>% as.vector()
+
+# Find closest SNPs (exclude reference)
+SNPs = plink_panel$map %>% 
+  filter(chromosome==gloc$chromosome) %>%
+  filter(abs(position-gloc$position)<(window_kb*1000/2)) %>%
+  filter(!snp.name==SNPref) %>%
+  pull(snp.name)
+
+# Identify their correlations, sort them (in absolute value) and return the vector
+ldcorr = snpStats::ld(plink_panel$genotypes[,SNPref], 
+             plink_panel$genotypes[,SNPs], 
+             stats=LD_measure) 
+ldcorr = setNames(as.vector(ldcorr), colnames(ldcorr))
+return(ldcorr[order(abs(ldcorr), decreasing = T)])
+}
+
+find.URL.files = function(url){
+  rvest::read_html(url) %>% 
+    html_nodes("a") %>%
+    html_attr("href") %>%
+    grep('^\\?.*',.,value=T, invert=T) %>%
+    paste0(url,.) %>%
+    .[-1]
+}
+
+getFileNames = function(paths){gsub('\\..*','',basename(paths))}
+```
+
+
+
+## 1) Set the input variables for the analysis
+
+```{r}
+# Initial input specification
+filtered_files_paths = list.files('data/initial_data', '',full.names = T)
+clumped_files_paths = list.files('../ind/results/depict', '.*UKB-[AC].*clumped*',full.names = T)
+metadata = read.xlsx('metadata.xlsx')
+
+# Load a genotype reference panel in PLINK format
+geno_panel = snpStats::read.plink(bed = 'data/genotype_data/1kg.v3/EUR.bed', 
+                                  bim = 'data/genotype_data/1kg.v3/EUR.bim', 
+                                  fam = 'data/genotype_data/1kg.v3/EUR.fam')
+
+# Set variables
+alfa=1e-9 # For the GWAS-Catalog filtering limit
+```
+
+## LD decay in the reference panel
+```{r}
+random_snps = sample(geno_panel$map$snp.name, 500)
+
+ld_decay=sapply(random_snps, function(snp){
+  ldcorr= build_LD_proxy_list(snp, geno_panel, window_kb = 2000,'R.squared')
+  bps = geno_panel$map$position[match(c(snp,names(ldcorr)),geno_panel$map$snp.name)]
+  names(ldcorr) = abs(bps[1]-bps[2:length(bps)])
+  return(ldcorr)
+},simplify = F, USE.NAMES = F) %>% unlist() 
+
+saveRDS(ld_decay, 'ld_decay.RDS')
+
+png(paste0('results/LD-decay_', length(random_snps), '-SNPs.png'), res = 150, width=550, height=480)
+data.frame(dist=as.numeric(names(ld_decay)), 
+           r_abs=abs(ld_decay)) %>% 
+  mutate(dist=round(dist,-3)/1000) %>%
+  group_by(dist) %>% 
+  summarize(avg_r=mean(r_abs), 
+            q25_r=quantile(r_abs,0.25),
+            q75_r=quantile(r_abs,0.75),
+            q50_r=quantile(r_abs,0.5),
+            err_r = sd(r_abs)) %>%
+  filter(dist<500) %>%
+ggplot(aes(x=dist))+
+  geom_line(aes(y=avg_r, color='Average'))+
+  geom_line(aes(y=q50_r, color='Median',), linetype='dashed')+
+  geom_errorbar(aes(y=avg_r, ymax=avg_r+err_r, ymin=avg_r-err_r, color='SD around the mean'), alpha=0.1)+
+  xlab('Genomic distance (kb)')+
+  ylab(expression("LD measure ("*r^{2}*")"))+
+  ggtitle(paste0('LD decay in 1000G reference panel'))+
+     scale_color_manual(values = c(
+    'Average' = 'turquoise4',
+    'Median' =  'red',
+    'SD around the mean' = "slategrey")) +
+  labs(color = 'Statistic measure')+
+  theme_classic(base_family = 'Times',base_size = 10.5)+
+  theme(plot.title = element_text(hjust=0.5, size = 12, face = 'bold'), 
+        legend.position = c(.75,.55), 
+        legend.text = element_text(size = 7),legend.title = element_text(size=9),
+        axis.title.x = element_text(vjust = -1),
+        axis.title.y = element_text(vjust = 1.5))
+dev.off()
+```
+
+
+## 2) Construct a proper object for your data 
+Perform LD-clumping over the target datasets and load them
+```{r message=FALSE, warning=FALSE, include=FALSE}
+list.comb = lapply(filtered_files_paths, function(f){
+  print(f)
+  # Load the data and filter only associated SNPs 
+  data = vroom(f, show_col_types = F, col_select = c('SNP','P', 'BETA','SE', 'Z', 'CHR','BP','EA'))  %>% dplyr::filter(`P` < alfa) 
+  
+  # Adapt your data to the reference panel. Annotate the file name
+  data = data[paste0(data$SNP, data$EA) %in% 
+                paste0(geno_panel$map$snp.name, geno_panel$map$allele.1),] %>%
+    mutate(DATA=gsub('\\..*','',basename(f)))
+  
+  # Filter only the lead SNPs (LD-clumping)
+  lead_snps = ieugwasr::ld_clump_local(data.frame(rsid=data$SNP, pval=data$P),
+                                 plink_bin = genetics.binaRies::get_plink_binary(),
+                                 bfile='data/genotype_data/1kg.v3/EUR',
+                                 clump_kb = 200, clump_r2 = 0.1, clump_p = alfa)$rsid
+  return(filter(data, SNP %in% lead_snps))
+  
+  }) 
+df.comb = rbindlist(list.comb)
+ 
+# Save the files somewhere
+lapply(split(df.comb, df.comb$DATA), function(f_int){
+  f_int2 = f_int %>% 
+    dplyr::select(SNP, EA, P, BETA, SE) %>%
+    mutate(r=NA, proxy=NA)
+  
+  fwrite(f_int2,  paste0('data/initial_final/',unique(f_int$DATA)))
+})
+```
+
+
+
+Quantify number of clumped (compared to significant) SNPs and save a table of the data
+```{r}
+n_assoc = df.comb0 %>%
+  group_by(data) %>%
+  summarise(total.assoc = n()) %>%
+  arrange(data)
+n_clump = df.comb %>%
+  group_by(DATA) %>%
+  summarise(total.clump = n()) %>%
+  arrange(DATA)
+write.xlsx(cbind(n_assoc, n_clump), 'results/tables/assoc&clump.xlsx')
+```
+
+
+
+
+Save the datasets fragments in your final data
+```{r}
+snps_ea = df.comb %>% select(SNP, EA) %>% unique() 
+sapply(names(list.comb), \(pheno){
+  data = list.comb[[pheno]] %>% mutate(SE=BETA/Z, r=NA, proxy=NA) %>% select(SNP, EA, BETA, SE, P, r, proxy) 
+  data = merge(snps_ea, data, by=c('SNP','EA'),all.x=T)
+  fwrite(data, paste0('data/gwasc_final/', pheno, '.txt'))
+})
+```
+
+
+
+## 3) Annotate the groups in your data 
+
+```{r}
+# Determine the different sex and age-stratisfied files
+df.comb$sex = gsub('.*_([a-zA-Z0-9]*)+\\..*{1-2}','\\1',df.comb$DATA)
+df.comb$age = gsub('(.*)_[a-zA-Z0-9]*\\..*{1-2}','\\1',df.comb$DATA)
+
+df.comb$age = gsub('(.*)_(.*)','\\1',df.comb$DATA)
+df.comb$sex = gsub('.*_(.*)','\\1',df.comb$DATA)
+```
+
+```{r}
+### Save the data
+saveRDS(df.comb, 'saved_objects/df.comb.RDS')
+```
+
+```{r}
+# Create all results directory before proceeding
+for (folder in c('GWAS_catalog', 'venn_diagrams', 'annex')){
+  dir.create(paste0('results/', folder,'/'),recursive = T)
+}
+```
+
+
+
+# Create a LD-correlation list panel with the genotype data for your lead SNPs
+```{r}
+# Create an object based on the lead_snps of your whole project 
+lead_snps = df.comb %>% dplyr::select(SNP, EA) %>% unique() 
+
+st=Sys.time()
+listLD_leadSNPs = lapply(lead_snps$SNP, function(snp){build_LD_proxy_list(snp, geno_panel, 5000)})
+Sys.time()-st
+object.size(listLD_leadSNPs)
+
+names(listLD_leadSNPs) = lead_snps$SNP
+
+# Save the object 
+saveRDS(listLD_leadSNPs3, file='saved_objects/listLD_leadSNPs_w5000.RDS')
+```
+
+
+
+
+
+
+## 4.1) Make VD representations of your associated/clumped variants for your age/sex-stratified files
+
+### Set different colors for each age-stratification
+```{r}
+colsByGroup = setNames(c('purple','yellow','paleturquoise3'),sort(unique(df.comb$age)))
+```
+
+
+
+
+
+## Are the instruments LD-indepdent?
+```{r}
+# Identify all LD-buddies
+ld_testing = expand.grid(unique(df.comb$SNP), unique(df.comb$SNP))
+ld_testing$ld= sapply(1:nrow(ld_testing), \(i) listLD_leadSNPs[[ld_testing$Var1[i]]][ld_testing$Var2[i]]) 
+
+# Make a LD matrix with the lead SNPs
+ld_comb.mtx = matrix(NA, nrow=length(unique(ld_testing$Var1)), ncol=length(unique(ld_testing$Var2)), 
+                     dimnames=list(unique(ld_testing$Var1), unique(ld_testing$Var2)))
+ld_comb.mtx[cbind(ld_testing$Var1, ld_testing$Var2)] = ld_testing$ld
+
+
+# Perform all comparisons to count number of matches and mismatches
+comparisons = expand.grid(unique(df.comb$DATA), unique(df.comb$DATA), unique(df.comb$DATA)) %>%
+  dplyr::mutate(age1 = gsub('(.*)_.*$', '\\1', Var1), 
+                age2 = gsub('(.*)_.*$', '\\1', Var2),
+                age3 = gsub('(.*)_.*$', '\\1', Var3),
+                sex1=gsub('.*_(.*)$', '\\1', Var1),
+                sex2=gsub('.*_(.*)$', '\\1', Var2),
+                sex3=gsub('.*_(.*)$', '\\1', Var3)) %>%
+  dplyr::filter(!(Var1==Var2 | Var2==Var3 | Var1==Var3) & (sex1==sex2 & sex2==sex3)) %>%
+  dplyr::filter(!duplicated(paste0(sex1))) 
+
+mtx_comparisons = matrix(NA, length(unique(comparisons$Var1)), length(unique(comparisons$Var2)),
+                dimnames=list(unique(comparisons$Var1), unique(comparisons$Var2)))
+ld_partners = sapply(1:nrow(comparisons), function(i){
+  snps1 = df.comb %>% dplyr::filter(DATA==comparisons[i,]$Var1) %>% pull(SNP)
+  snps2 = df.comb %>% dplyr::filter(DATA==comparisons[i,]$Var2) %>% pull(SNP)
+  snps3 = df.comb %>% dplyr::filter(DATA==comparisons[i,]$Var3) %>% pull(SNP)
+  
+  
+  n.intersections1.12 = sum(rowSums(ld_comb.mtx[snps1, snps2]>0.8)>0)
+  n.intersections1.13 = sum(rowSums(ld_comb.mtx[snps1, snps3]>0.8)>0)
+  n.intersections2.12 = sum(colSums(ld_comb.mtx[snps1, snps2]>0.8)>0)
+  n.intersections2.23 = sum(rowSums(ld_comb.mtx[snps2, snps3]>0.8)>0)
+  n.intersections2.23 = sum(rowSums(ld_comb.mtx[snps2, snps3]>0.8)>0)
+  
+  
+  n.only1 = length(snps1)-n.intersections1
+  n.only2 = length(snps2)-n.intersections2
+  
+  return(list(Var1=as.character(comparisons[i,]$Var1),
+              Var2=as.character(comparisons[i,]$Var2),
+              inter=min(n.intersections1, n.intersections2), 
+              only1=n.only1, only2=n.only2,
+              inter1 = n.intersections1, inter2 = n.intersections2))
+}) %>% t() %>% as.data.frame() %>% arrange(Var1, Var2)
+
+write.xlsx(ld_partners, 'results/venn_diagrams/ld_partners.xlsx')
+```
+
+
+# But are these SNPs genetically and functionally independent as well?
+Make a SNP->Gene->Functional annotation
+```{r}
+# df.comb = filter(df.comb, SNP %in% snps.BMI.pheno)
+library(biomaRt)
+# SNP (rsid) -> GEN (ensembl) annotation
+all_snp = useEnsembl(biomart='ENSEMBL_MART_SNP', host='https://grch37.ensembl.org', dataset='hsapiens_snp')
+gene_info = getBM(attributes = c('refsnp_id','chr_name', 'chrom_start', 'associated_gene','ensembl_gene_name'),
+                 filters='snp_filter', 
+                 values= unique(df.comb$SNP), 
+                 mart=all_snp)
+
+# GEN (ensembl) -> FUNCTION (go-id) annotation
+ensMart = useMart('ensembl', dataset = "hsapiens_gene_ensembl")
+goID_info <- getBM(attributes = c("go_id", 'ensembl_gene_id'), 
+                        filters = "ensembl_gene_id", 
+                        values = unique(gene_info$ensembl_gene_name), mart = ensMart)
+library(AnnotationDbi)
+library(GO.db)
+# Get also GO terms for the representation
+goTerm_info <- AnnotationDbi::select(GO.db, keys = unique(goID_info$go_id), columns = "TERM")
+go_info = merge(goID_info, goTerm_info, by.x='go_id',by.y='GOID')
+
+# Merge all together
+gene_fun_annot = merge(go_info, 
+                      gene_info, 
+                      by.x='ensembl_gene_id', 
+                      by.y='ensembl_gene_name')
+
+instruments.annot = merge(df.comb, gene_fun_annot, by.x='SNP', by.y='refsnp_id',allow.cartesian=T, all.x=T)
+
+
+
+# Do the same Venn Diagrams considering gene and GO intersects
+instruments.annot2 = instruments.annot %>% 
+  dplyr::filter(!is.na(associated_gene), !is.na(go_id), !associated_gene=='')
+df.comb_sexStrat = split(instruments.annot, instruments.annot$sex)
+df.comb_sexStrat2 = split(instruments.annot2, instruments.annot2$sex)
+plot_list = sapply(names(df.comb_sexStrat2)[c(2,1,3)], function(s){
+         
+         # For SNP independance
+         p1 = venn.diagram(split(df.comb_sexStrat[[s]]$SNP,
+                            df.comb_sexStrat[[s]]$age),filename = NULL,
+                                fill=c('purple','yellow','paleturquoise3'), cex=1.3,
+                                fontFamily='Times',  
+                                resolution = 80,disable.logging = T, 
+                                imagetype = 'png',category.names = c('','',''),
+                                col=c('gray35','gray35','gray35'))
+         
+
+         # For Gene indepedance
+         p2 = venn.diagram(split(df.comb_sexStrat2[[s]]$associated_gene, 
+                                      df.comb_sexStrat2[[s]]$age), filename=NULL,
+                                fill=c('purple','yellow','paleturquoise3'), cex=1.3,
+                                fontFamily='Times', category.names = c('','',''),
+                                col=c('gray35','gray35','gray35'), disable.logging = T,resolution = 80, force.unique = T)
+
+         # For function independance
+         p3 = venn.diagram(split(df.comb_sexStrat2[[s]]$go_id, 
+                                      df.comb_sexStrat2[[s]]$age), filename=NULL,
+                                fill=c('purple','yellow','paleturquoise3'), cex=1.3,
+                                fontFamily='Times', sub.cex = 2,category.names = c('','',''),
+                                col=c('gray35','gray35','gray35'), disable.logging = T,resolution = 80, force.unique = T)
+         
+         
+         return(arrangeGrob(grobs = list(p1,p2,p3), nrow = 3))
+       }
+)
+# Arrange the plots in a 3x3 grid
+png('results/venn_diagrams/ALL_VD.png', res = 115)
+pven = grid.arrange(plot_list[[1]], plot_list[[2]], plot_list[[3]], nrow=1)
+ggsave(plot = pven,'../mt copy 3/results/venn_diagrams/ALL_VD_BMIspecific2.png',device = 'png',dpi = 300)
+ggsave(plot = pven,'results/venn_diagrams/ALL_VD.png',device = 'png')
+dev.off()
+```
+
+
+
+
+## Calculate Jaccard indices for the sets
+```{r}
+jaccard = function(xlist, id.combination=NULL){
+  dist <- unlist(lapply(combn(xlist, 2, simplify = FALSE), function(x) {
+  length(intersect(x[[1]], x[[2]]))/length(union(x[[1]], x[[2]])) }))
+  jacc.df = as.data.frame(cbind(t(combn(names(xlist),2)), dist))
+  
+  if(!is.null(id.combination)){jacc.df$group = id.combination; return(jacc.df)}
+  return(jacc.df)
+}
+
+save.image('../mt copy 3/saved_objects/PLOTS_WITH_BMI_SPECIFIC.RData')
+jacc_list = sapply(names(df.comb_sexStrat2)[c(2,1,3)], function(s){
+  snp.list = split(df.comb_sexStrat[[s]]$SNP,df.comb_sexStrat[[s]]$age)
+  gene.list = split(df.comb_sexStrat2[[s]]$ensembl_gene_id,df.comb_sexStrat2[[s]]$age)
+  go.list = split(df.comb_sexStrat2[[s]]$go_id,df.comb_sexStrat2[[s]]$age)
+  
+  rbindlist(list(as.data.frame(jaccard(snp.list, 'Rsid')), 
+                 jaccard(gene.list, 'Ensembl'), 
+                 jaccard(go.list, 'GO term')))
+},USE.NAMES = T, simplify = F) 
+names(jacc_list)
+jacc_df = merge(jacc_list[[1]], jacc_list[[2]], by=c('V1','V2', 'group'), suffixes=c('_female', '_both'))
+jacc_df = merge(jacc_df, jacc_list[[3]], by=c('V1','V2', 'group'), suffixes=c('', '_male'))
+colnames(jacc_df)[c(1,2)] = c('Set 1', 'Set 2')
+jacc_df = jacc_df %>% mutate(dist_female=round(as.numeric(dist_female),2),
+                   dist_male=round(as.numeric(dist),2),
+                   dist_both=round(as.numeric(dist_both),2))
+
+write.xlsx(jacc_df %>% arrange(group), '../mt copy 3/results/venn_diagrams/jaccard_table_BMIspecific.xlsx')
+
+# Calculate values of pairwise comparisons
+jacc_df %>% pivot_longer(cols = c('dist_female', 'dist_both', 'dist_male'), names_to = 'sex') %>% group_by(group) %>% summarise(m=mean(as.numeric(value)))
+```
+
+
+# Phenotype investigation
+```{r}
+# Make sure rsid are not already associated with the outcomes
+all_snp = useEnsembl(biomart='ENSEMBL_MART_SNP', host='https://grch37.ensembl.org', dataset='hsapiens_snp')
+pheno_info = getBM(attributes = c('refsnp_id','phenotype_name'),
+                 filters='snp_filter', 
+                 values= unique(df.comb$SNP), 
+                 mart=all_snp)
+pheno_info.df = merge(df.comb, pheno_info, all.x=T, by.x='SNP', by.y='refsnp_id') 
+pheno_info.df %>% dplyr::filter(phenotype_name=='FTD') %>% pull(SNP) %>% unique()
+pheno_info.df %>%
+  group_by(DATA,phenotype_name) %>%
+  summarise(n_phenos =  n()) %>%
+  pivot_wider(names_from = 'DATA', id_cols = "phenotype_name", values_from = 'n_phenos') %>%
+  t() %>% as.data.frame() 
+
+snps.BMI.pheno = pheno_info.df %>%
+  dplyr::filter(phenotype_name %in% c('BMI',NA,'')) %>%
+  pull(SNP) %>% unique()
+
+snps.BMI.pheno2 = pheno_info.df %>%
+  group_by(DATA) %>% summarise(n=sum(duplicated(SNP)))
+  dplyr::filter(phenotype_name %in% c('BMI') | (phenotype_name %in% c('',NA) & age=='ChildAdult' & sex %in% c('male','female','both'))) %>%
+  pull(SNP) %>% unique()
+
+snps.nonBMI.pheno = pheno_info.df %>% filter(!phenotype_name %in% c('BMI','',NA)) %>% pull(SNP)
+
+aggregate(DATA~phenotype_name, data=pheno_info.df, FUN=function(x) table(x)/length(x))
+reshape(aggregate(DATA~phenotype_name, data=pheno_info.df, FUN=function(x) table(x)/length(x)),
+        idvar = 'phenotype_name')
+reshape2::melt(aggregate(DATA~phenotype_name, data=pheno_info.df, FUN=function(x) table(x)/length(x)), id.vars='phenotype_name')
+ggplot(pheno_info.df, aes(DATA, phenotype_name, fill=phenotype_name))+
+  geom_violin()+
+  theme_classic()
+
+pheno_info.df %>%
+  arrange(phenotype_name) %>% mutate(pos=1:nrow(.)) %>% arrange(-pos) %>% 
+  filter(!duplicated(SNP))%>% pull(phenotype_name) %>% table()
+  dplyr::filter(phenotype_name %in% c('BMI',NA,'')) %>%
+  pull(SNP) %>% unique()
+
+
+```
+
+
+Identify the GO terms associated to each cluster and run a permutation test (enrichment)
+```{r}
+# Associate clusters and GO terms and find the current enrichment profiles
+nav_mtx.enrich = matrix(0, nrow=length(colnames(nav_res$fit$g)), 
+                        ncol=length(unique(go_annotations$TERM)), 
+                        dimnames=list(colnames(nav_res$fit$g), 
+                                      unique(go_annotations$TERM)))
+nav_mtx.enrich.i = matrix(0, nrow=length(colnames(nav_res$fit$g)), 
+                        ncol=length(c(unique(go_annotations$TERM))), 
+                        dimnames=list(colnames(nav_res$fit$g), 
+                                      unique(go_annotations$TERM)))
+
+# Find the levels of enrichment for the current data
+nav_annotations = clusters_df.annot %>%
+  na.omit() %>%
+  group_by(cluster, TERM) %>% 
+  count()
+nav_mtx.enrich[cbind(nav_annotations$cluster, nav_annotations$TERM)] = nav_annotations$n
+
+
+# Do permutations to assess the enrichments of each cluster
+l.mtx = lapply(1:5000, function(i){
+
+    nav_annotations.i  = merge(mutate(clusters_df,rsid=sample(rsid)), cluster_annot, 
+                              by.x='rsid', by.y='refsnp_id') %>%
+      na.omit() %>%
+      group_by(cluster, TERM) %>% 
+      count()
+    
+  nav_mtx.enrich.i[cbind(nav_annotations.i$cluster, nav_annotations.i$TERM)] = nav_annotations.i$n
+  return(nav_mtx.enrich.i >= nav_mtx.enrich)
+})
+
+# Sum the results and find proportions
+l.mtx2 = Reduce('+', l.mtx)
+n.tests = dim(l.mtx2)[1] * dim(l.mtx2)[2]
+final_nav = nav_mtx.enrich[which(l.mtx2*n.tests/20000 <0.05, arr.ind = T)[,'row'], 
+                           which(l.mtx2*n.tests/20000 <0.05, arr.ind = T)[,'col']]
+
+sigfuns.clusters = data.frame(go=colnames(nav_mtx.enrich)[which(l.mtx2*n.tests/20000 <0.01, arr.ind = T)[,'col']], 
+           cluster=rownames(nav_mtx.enrich)[which(l.mtx2*n.tests/15000 <0.01, arr.ind = T)[,'row']],
+           sign='Yes') %>% 
+  group_by(cluster) %>% reframe(n_sign = n(), go=go) 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# GWAS CATALOG 
+Load info from the server, and use it to annotate your data (considering rsid-SNP and effect allele)
+```{r}
+# Delete older files of the gwas catalog if they exist
+sapply(list.files(pattern='gwas_catalog'), \(x) unlink(x))
+
+# Download the GWAS Catalog data current version
+options(timeout = 1000)
+download.file(url= "https://www.ebi.ac.uk/gwas/api/search/downloads/alternative", 
+              destfile =  paste0('data/',"gwas_catalog_data",".", Sys.Date(),".tsv"))
+
+# Load the file into R
+gwcat = vroom('saved_objects/gwas_catalog_data.2023-03-24.tsv.gz')
+```
+
+Create ancestry annotation and filter only: 
+* European populations
+* SNP with rsid codes
+* P values of 5*10^-8 (so all studies agree in the associations)
+
+```{r}
+gwcat$ancestry = sapply(str_extract_all(gwcat$`INITIAL SAMPLE SIZE`, '[A-Z][a-z]+'), 
+              \(x) paste0(sort(unique(x)),collapse=',')
+              )
+
+pops = c("European", "British", "Finish", "German", "Icelandic", "Black,European", 
+  "British,White", "European,Up", "Attention,European", "Greek", "Spanish", 
+  "Danish", "Swedish", "European,Orcadian", "Scandinavian", "Erasmus,European,Rucphen",
+  "European,Northern", "Dutch", "French", "Croatian", "Mediterranean", 
+  "European,I", "British,European", "British,Irish", "English", "Irish", 
+  "Polish", "Scottish", "Finnish,Northern", "British,Finnish", "European,Icelandic")
+
+# Select the columns of interest
+gwcat = gwcat %>% dplyr::select("SNPS", "PUBMEDID", "DISEASE/TRAIT",
+                          "REPORTED GENE(S)", "STRONGEST SNP-RISK ALLELE", 
+                          "CONTEXT", "P-VALUE", "OR or BETA", "INITIAL SAMPLE SIZE", 
+                          "ancestry", "STUDY ACCESSION", "STUDY") %>%
+  filter(startsWith(SNPS, 'rs'), 
+         ancestry %in% pops,
+         as.numeric(`P-VALUE`)<alfa) %>%
+  mutate(EA=substr(`STRONGEST SNP-RISK ALLELE`, 
+                   nchar(`STRONGEST SNP-RISK ALLELE`),
+                   nchar(`STRONGEST SNP-RISK ALLELE`)),
+         SNP = SNPS)
+```
+
+Merge GWAS-CATALOG data with ours based on: RSID & A1
+```{r}
+df.comb_annot = merge(x = df.comb, y = gwcat, by=c('SNP','EA'), all.x=T)
+```
+
+Create a column with the sample size of the GWAS-Catalog Study
+```{r}
+df.comb_annot$sample_size =  gsub('[a-zA-Z,.]','',df.comb_annot$`INITIAL SAMPLE SIZE`) %>% 
+  str_extract('([0-9]+)') %>% as.numeric()
+
+# Transform the p-value into a numeric column
+df.comb_annot$`P-STUDY` = as.numeric(df.comb_annot$`P-VALUE`) 
+
+length(unique(df.comb$SNP)); length(unique(filter(df.comb_annot,!is.na(`OR or BETA`))$SNP)) # Only 10% of SNPs have been previously reported from the whole data
+```
+
+Create a column indicating if the GWAS-Catalog study presents a summary statistics file available
+```{r}
+# Get all GCST-codes with SS files available in GWAS-Catalog
+links_all <-rvest::read_html( "http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/") %>% 
+   html_nodes("a") %>%
+   html_attr("href") %>% 
+   grep('^GCST.*', .,value=T)
+
+gcst_withSS = c()
+for (link in links_all){
+  gcst_withSS = c(gcst_withSS, 
+                  rvest::read_html(paste0("http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/", link))%>% 
+   html_nodes("a") %>%
+   html_attr("href") %>% 
+   grep('^GCST.*', .,value=T) %>% gsub('/','',.))
+}
+
+# Include a column to indicate the availability of SS
+df.comb_annot = mutate(df.comb_annot, 
+                       hasSS = ifelse(`STUDY ACCESSION` %in% gcst_withSS, 'Yes', 'No')) %>%
+  filter(hasSS=='Yes') 
+
+
+```
+
+
+Save the final dataset to load it directly in the next session
+```{r}
+saveRDS(df.comb_annot, 'saved_objects/df.comb_annot.RDS')
+saveRDS(df.comb, 'saved_objects/df.comb.RDS')
+saveRDS(study_per_trait, 'saved_objects/study_per_trait.RDS')
+```
+
+
+# SELECTION OF TRAITS AND THEIR SUMMARY STATISTICS
+Based on the GWAS catalog data the traits are selected following the next criteria:
+a) The total number of (non-duplicated) SNPs for the trait reported matching the *clumped*
+b) The availability or not of any study with SS files
+!!! May we also ensure that all of our data-traits are present? 
+
+```{r}
+# Annotate/calculate for the different diseases
+df.traitsByGroup = mutate(df.comb_annot, dir=ifelse(abs(BETA)+abs(`OR or BETA`)==abs(BETA+`OR or BETA`),1,-1)) %>%
+  dplyr::filter(!is.na(`DISEASE/TRAIT`)=='NA') %>%
+  mutate(RSDA_snp=`OR or BETA`*BETA) %>%
+  group_by(SNP, `DISEASE/TRAIT`,age, sex, DATA) %>% summarize(RSDA_snp =mean(RSDA_snp)) %>%
+  group_by(`DISEASE/TRAIT`,age, sex, DATA) %>%
+  summarize(RSDA=sum(RSDA_snp,na.rm = T), Nr_SNPs = n(), ) %>%
+  arrange(-Nr_SNPs,-RSDA)
+
+# Traits sorted by number of SNPs matching 
+traits_sorted = group_by(df.traitsByGroup, `DISEASE/TRAIT`) %>% 
+  summarize(n_snps = sum(Nr_SNPs)) %>% 
+  arrange(-n_snps) %>% 
+  na.omit() %>% pull(`DISEASE/TRAIT`)
+
+# Traits with Summary Statistics available
+traits_withSS = filter(df.comb_annot, hasSS=='Yes') %>%
+  pull(`DISEASE/TRAIT`) %>% unique()
+
+# Traits with all diseases in the data (Maybe l)
+df.traitsByGroup %>% filter(sex=='both') %>% dplyr::select(-`DATA`,-RSDA) %>%
+  pivot_wider(names_from = age, values_from =Nr_SNPs)
+
+# Identify the trais obeying both conditions and select a number of them to represent
+traits_to_study = c(traits_sorted[traits_sorted %in% traits_withSS],'Height')
+```
+
+
+## Make representations for these traits to see the differences of the distinct age/sex-stratitifated files
+
+```{r}
+# Nr SNPs associated and reported by GWAS-catalog traits 
+png('results/GWAS_catalog/nSNP_GWAScat_top20diseases.png')
+filter(df.traitsByGroup, `DISEASE/TRAIT` %in% traits_to_study) %>%
+  ggplot(aes(x=`DISEASE/TRAIT`, y=Nr_SNPs, fill=age))+
+  geom_col()+
+  facet_wrap(~sex)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1,size = 6),
+        axis.text.y = element_text(size = 6),
+        text = element_text(family = 'Times'),
+        plot.title = element_text(hjust=0.5), 
+       strip.background=element_blank())+
+  ylab("SNPs associated")+
+  xlab( 'Trait from NHGRI EBI-GWAS catalog')+
+  labs(title='Number of lead BTV-SNPs associated with\n top 30 NHGRI-EBI catalog phenotypes')+
+  coord_flip()
+dev.off()
+
+# RSDA (beta1*beta2) by GWAS-catalog traits
+png('results/GWAS_catalog/RSDA_GWAScat_top20diseases.png')
+filter(df.traitsByGroup, `DISEASE/TRAIT` %in% traits_to_study) %>%
+  ggplot(aes(x=`DISEASE/TRAIT`, y=RSDA, fill=age))+
+  geom_col()+
+  facet_wrap(~sex)+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, hjust = 1,size = 6),
+        axis.text.y = element_text(size = 6),
+        text = element_text(family = 'Times'),
+        plot.title = element_text(hjust=0.5), 
+       strip.background=element_blank())+
+  xlab('Fraction of SNPs reported ()')+
+  ylab( 'Trait or disease' )+
+  labs(title='Top 30 most matched phenotypes in GWAS catalog')+
+  coord_flip()
+dev.off()
+```
+
+
+Among the studies selected for each trait select the one with the biggest sample size and available SS
+```{r}
+# Find the study for each trait based on the mentioned conditions
+study_per_trait = df.comb_annot %>% 
+  filter(hasSS=='Yes') %>%
+  filter(`DISEASE/TRAIT` %in% traits_to_study,
+         !duplicated(`STUDY ACCESSION`)) %>%
+  arrange(-sample_size) %>%
+  filter(!duplicated(`DISEASE/TRAIT`)) %>%
+  mutate(gcst=gsub('GCST([0-9]*)','\\1',`STUDY ACCESSION`)) %>%
+  mutate(gcst=as.numeric(gcst)) 
+
+
+# Find the correct URL to connect to the API
+links0df = data.frame(minGCST=as.numeric(gsub('GCST0*([0-9]*)-GCST.*','\\1',links_all)),
+                      maxGCST=as.numeric(gsub('GCST.*-GCST0*([0-9]*)/','\\1',links_all)))
+
+# Prepare a data table for the reference panel
+geno_panel_dt = as.data.table(geno_panel$map)
+
+# Prepare a matrix to impute quality of downloaded and cleaned datasets
+mtx = matrix(NA, nrow=length(traits_to_study), ncol=8, 
+             dimnames = list(traits_to_study, 
+                             c('Size', 'N0', 'Npanel', 'Npresent', 
+                               'Nmiss', 'Nimp', 'Ravg', 'url')))
+
+mtx = matrix(NA, nrow=nrow(study_per_trait), ncol=8, 
+             dimnames = list(study_per_trait$`DISEASE/TRAIT`, 
+                             c('Size', 'N0', 'Npanel', 'Npresent', 
+                               'Nmiss', 'Nimp', 'Ravg', 'url', 'gcst', 'PUBMEDID')))
+
+mtx = study_per_trait %>% 
+  select(`DISEASE/TRAIT`, PUBMEDID, gcst) %>%
+  mutate(Trait=`DISEASE/TRAIT`, N0=NA, Npanel=NA, Npresent=NA, Nmiss=NA, Nimp=NA, Ravg=NA, url=NA) %>%
+  filter(!duplicated(`DISEASE/TRAIT`)) %>%
+  column_to_rownames(var = "DISEASE/TRAIT") %>%
+  as.matrix()
+```
+
+
+```{r}
+study_per_trait0 = filter(study_per_trait, !`DISEASE/TRAIT` %in% rownames(info_mtx))
+study_per_trait = study_per_trait0[c(16,31,22:24,4,10,6,13,24:27,35)]
+
+
+i=12
+for (i in 13:nrow(study_per_trait)){
+  row = study_per_trait[i,]
+  print(paste0(i, ': ', row$`DISEASE/TRAIT`)); st=Sys.time()
+  
+  if(row$`DISEASE/TRAIT` %in% getFileNames(list.files('data/gwasc_final/'))){}
+  
+  # Get accession number
+  gcst = as.numeric(row$gcst)
+  
+  
+  # Decipher the url you need for the API
+  link0 = links_all[links0df$minGCST<=gcst & links0df$maxGCST>=gcst]
+  url = paste0('http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/', 
+             link0, row$`STUDY ACCESSION`, '/')
+  
+  # Identify files (also those inside subdirectories)
+  url_files = find.URL.files(url)
+  for (dir in grep('.*/$', url_files, value=T)){
+    url_files = c(url_files[!url_files==dir], find.URL.files(dir))
+  }
+ 
+  # Keep only txt/tsv/gz files. If there are not, skip the dataset 
+  url_files = grep('.*\\.[gztsvtxtzip]*$', url_files, value=T)
+  if (length(url_files)==0){next}
+  
+  # Find the Summary Statistics file in the folder by taking the one with the biggest size
+  url_files_sizes = sapply(url_files, \(x) as.numeric(httr::HEAD(x)$headers$`content-length`)) %>% unlist()
+  
+  for (file_url in names(sort(url_files_sizes,T))){
+    if (endsWith(file_url,'zip')){
+      download.file(file_url, basename(file_url))
+      ss_file_url = basename(file_url)
+      test_df = try(vroom(basename(file_url), n_max=50, show_col_types = F))
+    }
+    else{test_df = try(vroom(file_url, n_max = 50))
+    }
+    if (any(class(test_df) %in% c("spec_tbl_df","tbl_df","tbl","data.frame"))){
+      ss_file_url = file_url
+      break}
+  }
+  
+  # Partially load the file, decide the column names
+  col_names = suppressWarnings(identify_SS_cols(test_df))
+  if (any(is.na(col_names[c('SNP','EA','P','BETA','SE')]))){
+    test_df = vroom(ss_file_url, show_col_types = F)
+    col_names = identify_SS_cols(test_df, as.index = F)
+    
+    if (any(is.na(col_names[c('SNP','EA','P','BETA','SE')]))){
+      next # This is the same as "next" in a regular loop
+      }
+  }
+  
+
+  print(Sys.time()-st); print('Start reading whole file')
+  # Load only neccessary columns 
+  df = vroom(ss_file_url, col_select = unname(col_names[c('SNP', 'EA', 'P', 'BETA', 'SE')]), 
+             col_type=c('c','c','n','n','n'), show_col_types = F) %>%
+    `colnames<-`(c('SNP', 'EA', 'P', 'BETA', 'SE')) %>%
+    mutate(EA = toupper(EA),    # In case the effect allele is not in upper letter
+           SNP = gsub('(rs[0-9]*).*$','\\1',SNP))  # Elude potential rsid additions
+  
+  n_initial = nrow(df)
+  
+  print(Sys.time()-st); print('Subset of file for LD panel')
+  
+  # Subset only the reference panel and make sure there are single rows
+  df = data.table::merge.data.table(as.data.table(df),
+                                    geno_panel_dt,
+                                    by.x=c("SNP","EA"), 
+                                    by.y=c('snp.name','allele.1'), 
+                                    all=F) %>%
+    .[,list(P=mean(P), 
+           BETA=mean(BETA),
+           SE=mean(SE)),c('SNP','EA')]
+  
+   # Save the data to use it later
+  fwrite(df, paste0('data/gwasc_clean/',
+                    row$`DISEASE/TRAIT`, '.txt.gz'), 
+         quote=F, row.names=F)
+
+  
+  # Identify the present and missing SNPs
+  present_snps = df[paste0(df$SNP, df$EA) %in% paste0(lead_snps$SNP, lead_snps$EA),] %>% 
+    mutate(r=NA, proxy=NA)
+
+ 
+  # Identify missing SNPs and find LD-proxies
+  missing_snps = setdiff(lead_snps$SNP, present_snps$SNP)
+  missing_ea = lead_snps$EA[match(missing_snps, lead_snps$SNP)]
+
+  print(Sys.time()-st); print('Search for LD proxies')
+  LD_proxies_rsids = sapply(missing_snps, function(snp){
+    ldcorr = listLD_leadSNPs[[snp]] 
+    ldcorr[names(ldcorr) %in% df$SNP][1]
+  }, USE.NAMES = F)
+  
+  
+  print(Sys.time()-st); print('Impute LD proxies in missing data')
+  
+  # Substitute the information and get the rows
+  LD_proxies_snps = df[match(names(LD_proxies_rsids), df$SNP),] %>% 
+    mutate(r = LD_proxies_rsids, 
+           proxy = SNP, 
+           SNP = missing_snps, 
+           EA=missing_ea)
+
+  # Bind and save the data arranged/sorted
+  if (nrow(present_snps)>0){
+     final_df = dplyr::bind_rows(as.data.frame(present_snps), LD_proxies_snps) %>%
+    dplyr::select(SNP, EA, BETA, SE, P, r, proxy) %>%
+    arrange(SNP) 
+  }
+  if (length(missing_snps)==0){
+    final_df = present_snps
+  }
+  if (nrow(present_snps)==0){
+    final_df = LD_proxies_snps
+  }
+
+  
+  # Save the data to use it later
+  fwrite(final_df, paste0('data/gwasc_final/',row$`DISEASE/TRAIT`, '.txt.gz'), 
+         quote=F, row.names=F)
+
+  if (length(LD_proxies_rsids)==0){LD_proxies_rsids = NA}
+  
+  print(paste0('Not-imputed: ', nrow(filter(LD_proxies_snps, is.na(r)))))
+  
+  
+  # Return the characteristics of this downloaded file
+  mtx[cbind(rep(row$`DISEASE/TRAIT`,7), 
+          c('N0', 'Npanel', 'Npresent', 
+            'Nmiss', 'Nimp', 'Ravg', 'url'))] = c(n_initial, nrow(df),
+                                                  nrow(present_snps), length(missing_snps),
+                                                  nrow(filter(LD_proxies_snps, !is.na(r))),
+                                                  mean(abs(LD_proxies_rsids),na.rm=T),
+                                                  ss_file_url)
+}
+```
+
+
+
+
+Do the same with the internal files
+
+```{r}
+# Prepare a matrix to impute quality of downloaded and cleaned datasets
+mtx2 = matrix(NA, nrow=length(list.files('data/initial_data', full.names=T)), ncol=8, 
+             dimnames = list(getFileNames(list.files('data/initial_data', full.names=T)), 
+                             c('Size', 'N0', 'Npanel', 'Npresent', 
+                               'Nmiss', 'Nimp', 'Ravg', 'url')))
+
+ss_file_url = list.files('../../../Downloads', pattern='Height*', full.names=T)[1]
+ss_file_url = list.files('data/initial_data', full.names=T)[1]
+for (ss_file_url in list.files('data/initial_data/',full.names = T)){
+  
+  trait = getFileNames(ss_file_url)
+  print(trait)
+  test_df = vroom(ss_file_url, n_max=50)
+
+# Partially load the file, decide the columns and then load those renaming them
+  col_names = suppressWarnings(identify_SS_cols(test_df))
+  if (any(is.na(col_names[c('SNP','EA','P','BETA','SE')]))){
+    test_df = vroom(ss_file_url)
+    col_names = identify_SS_cols(test_df, as.index = F)
+    
+    if (any(is.na(col_names[c('SNP','EA','P','BETA','SE')]))){
+      next # This is the same as "next" in a regular loop
+      }
+  }
+  
+  
+  
+  print(Sys.time()-st); print('Start reading whole file')
+  
+  # Load only neccessary columns 
+  df = vroom(ss_file_url, col_select = unname(col_names[c('SNP', 'EA', 'P', 'BETA', 'SE')]), 
+             col_type=c('c','c','n','n','n')) %>%
+    `colnames<-`(c('SNP', 'EA', 'P', 'BETA', 'SE')) %>%
+    mutate(EA = toupper(EA),    # In case the effect allele is not in upper letter
+           SNP = gsub('(rs[0-9]*).*$','\\1',SNP))  # Elude potential rsid additions
+  
+  n_initial = nrow(df)
+  
+  print(Sys.time()-st); print('Subset of file for LD panel')
+  
+  # Subset only the reference panel and make sure there are single rows
+  df = data.table::merge.data.table(as.data.table(df),
+                                    geno_panel_dt,
+                                    by.x=c("SNP","EA"), 
+                                    by.y=c('snp.name','allele.1'), 
+                                    all=F) %>%
+    .[,list(P=mean(P), 
+           BETA=mean(BETA),
+           SE=mean(SE)),c('SNP','EA')]
+  
+   # Save the data to use it later
+  fwrite(df, paste0('data/initial_clean/',
+                    trait, '.txt.gz'), 
+         quote=F, row.names=F)
+
+  
+  
+  # Identify the present and missing SNPs
+  present_snps = df[paste0(df$SNP, df$EA) %in% paste0(lead_snps$SNP, lead_snps$EA),] %>% 
+    mutate(r=NA, proxy=NA)
+
+ 
+  # Identify missing SNPs and find LD-proxies
+  missing_snps = setdiff(lead_snps$SNP, present_snps$SNP)
+  missing_ea = lead_snps$EA[match(missing_snps, lead_snps$SNP)]
+
+  print(Sys.time()-st); print('Search for LD proxies')
+  LD_proxies_rsids = sapply(missing_snps, function(snp){
+    ldcorr = listLD_leadSNPs[[snp]] 
+    ldcorr[names(ldcorr) %in% df$SNP][1]
+  }, USE.NAMES = F)
+  
+  
+  print(Sys.time()-st); print('Impute LD proxies in missing data')
+  
+  # Substitute the information and get the rows
+  LD_proxies_snps = df[match(names(LD_proxies_rsids), df$SNP),] %>% 
+    mutate(r = LD_proxies_rsids, 
+           proxy = SNP, 
+           SNP = missing_snps, 
+           EA=missing_ea)
+
+  # Bind and save the data arranged/sorted
+  if (nrow(present_snps)>0){
+     final_df = dplyr::bind_rows(as.data.frame(present_snps), LD_proxies_snps) %>%
+    dplyr::select(SNP, EA, BETA, SE, P, r, proxy) %>%
+    arrange(SNP) 
+  }
+  if (length(missing_snps)==0){
+    final_df = present_snps
+  }
+  if (nrow(present_snps)==0){
+    final_df = LD_proxies_snps
+  }
+
+  
+  # Save the data to use it later
+  fwrite(final_df, paste0('data/initial_final/',trait, '.txt.gz'), 
+         quote=F, row.names=F)
+
+  if (length(LD_proxies_rsids)==0){LD_proxies_rsids = NA}
+  
+  print(paste0('Not-imputed: ', nrow(filter(LD_proxies_snps, is.na(r)))))
+  
+  
+  # Return the characteristics of this downloaded file
+  mtx2[cbind(rep(trait,7), 
+          c('N0', 'Npanel', 'Npresent', 
+            'Nmiss', 'Nimp', 'Ravg', 'url'))] = c(n_initial, nrow(df),
+                                                  nrow(present_snps), length(missing_snps),
+                                                  nrow(filter(LD_proxies_snps, !is.na(r))),
+                                                  mean(abs(LD_proxies_rsids),na.rm=T),
+                                                  ss_file_url)
+}
+```
+
+
+
+
+
+
+
+```{r}
+std_per_t = readRDS('saved_objects/matrix_info_extData.RDS')
+write.xlsx(as.data.frame(new_info_mtx), 'data/metainfo.xlsx')
+
+match(study_per_trait$`DISEASE/TRAIT`, rownames(info_mtx))
+rownames(info_mtx)
+study_per_trait$`DISEASE/TRAIT`
+```
+
+
+
+```{r}
+getFileNames(list.files('data/gwasc_clean/')) %>% duplicated()
+```
+
+
+
+```{r}
+
+matrix_info = matrix(NA, length(files), 7, 
+                     dimnames = list(files, c('N0','Nimp', 'Nmiss','Ravg', 
+                                              'Sample_size', 'GCST', 'PUBMEDID')))
+
+for (f in rownames(matrix_info)[nrow(matrix_info)]){
+  print(f)
+  df = vroom(list.files('data/gwasc_clean', paste0(f,'*'), full.names = T))
+  print(list.files('data/gwasc_clean', paste0(f,'*')))
+  # Identify the relevant information of the cleaned data
+  info_vr = filter(df.comb_annot, `DISEASE/TRAIT`==f) %>%  
+   arrange(-sample_size) %>% 
+   .[1,] %>% select(sample_size, `STUDY ACCESSION`, PUBMEDID) %>% 
+   as.vector() %>% unlist()
+  
+  # Save it in the proper way
+  if (!file.exists(paste0('data/gwasc_clean/', f, '.txt.gz'))){
+  fwrite(df, paste0('data/gwasc_clean/', f, '.txt.gz'))
+    }
+  
+  if (length(list.files('data/gwasc_final', paste0(f,'*'), full.names = T))==0){
+    # Identify the present and missing SNPs
+    present_snps = df[paste0(df$SNP, df$EA) %in% paste0(lead_snps$SNP, lead_snps$EA),] %>% 
+      mutate(r=NA, proxy=NA)
+  
+    # Identify missing SNPs and find LD-proxies
+    missing_snps = setdiff(lead_snps$SNP, present_snps$SNP)
+    missing_ea = lead_snps$EA[match(missing_snps, lead_snps$SNP)]
+  
+    print(Sys.time()-st); print('Search for LD proxies')
+    LD_proxies_rsids = sapply(missing_snps, function(snp){
+      ldcorr = listLD_leadSNPs[[snp]] 
+      ldcorr[names(ldcorr) %in% df$SNP][1]
+    }, USE.NAMES = F)
+    
+    # Substitute the information and get the rows
+    LD_proxies_snps = df[match(names(LD_proxies_rsids), df$SNP),] %>% 
+      mutate(r = LD_proxies_rsids, 
+             proxy = SNP, 
+             SNP = missing_snps, 
+             EA=missing_ea)
+  
+    # Bind and save the data arranged/sorted
+    if (nrow(present_snps)>0){
+       df2 = dplyr::bind_rows(as.data.frame(present_snps), LD_proxies_snps) %>%
+      dplyr::select(SNP, EA, BETA, SE, P, r, proxy) %>%
+      arrange(SNP) 
+    }
+    if (length(missing_snps)==0){
+      df2 = present_snps
+    }
+    if (nrow(present_snps)==0){
+      df2 = LD_proxies_snps
+    }
+    
+  }
+ 
+  if (length(list.files('data/gwasc_final', paste0(f,'*'), full.names = T))>0){
+    df2 = vroom(list.files('data/gwasc_final', paste0(f,'*'), full.names = T)[1])
+ }
+  
+  matrix_info[f,] = c(N0 = nrow(df), 
+                      Nimp = nrow(filter(df2, is.na(r), is.na(proxy))),
+                      Nmiss = nrow(filter(df2, is.na(BETA) | is.na(SE) | is.na(P))),
+                      Ravg = mean(abs(df2$r), na.rm=T),
+                      Sample_size = info_vr[1],
+                      GCST = info_vr[2], 
+                      PUBMEDID = info_vr[3])
+  
+  print(matrix_info[f,'Nmiss'])
+  # Save it in the proper way
+  fwrite(df2, paste0('data/gwasc_final/', f, '.txt.gz'))
+}
+
+
+write.xlsx(as.data.frame(matrix_info) %>% mutate(Trait=rownames(.)), 
+           'metainfo_gwasc.xlsx')
+
+# Delete files that are repeteatd and with incorrect format
+list.files('data/gwasc_clean/')[duplicated(getFileNames(list.files('data/gwasc_clean/')))]
+f_no_interest = setdiff(list.files('data/gwasc_final/',full.names = T), list.files('data/gwasc_final/', pattern = '*.txt.gz', full.names = T))
+
+getFileNames(f_no_interest) %in% getFileNames(list.files('data/gwasc_clean/', pattern = '*.txt.gz', full.names = T))
+do.call(file.remove, list(f_no_interest))
+
+```
+
+
+```{r}
+write.xlsx(all_res %>% dplyr::select(exposure, outcome, method, b), 'results/25_pheno_Normal/MR_res.xlsx')
+all_resres = all_res %>%
+  dplyr::mutate(exposure=simplifyNameFiles(exposure)) %>%
+    dplyr::mutate(pval= p.adjust(pval, 'fdr')) %>%
+    dplyr::mutate(`Causal effect estimate`= ifelse(pval<0.1, b, NA)) %>%
+    dplyr::mutate(outcome=simplifyNameFiles(outcome),
+                  m = method_nomenclature[method]) %>%
+  dplyr::mutate(outcome.method = paste0(outcome, '     ', method, '')) %>%
+  dplyr::mutate(beta =`Causal effect estimate`) %>%
+  dplyr::mutate(Het.label = ifelse(Q_pval.adj<0.05, 'H', ''), 
+                    Plt.label = ifelse(plt_pval.adj<0.05, 'P', ''),
+                    Dir.label = ifelse(steiger_pval.adj>0.05, 'D', '')) %>%
+  dplyr::mutate(Het.label = ifelse(is.na(Het.label), '', Het.label), 
+                    Plt.label = ifelse(is.na(Plt.label), '', Plt.label),
+                    Dir.label = ifelse(is.na(Dir.label), '', Dir.label),
+                    plt_pval.adj<0.05, 'P', '') %>%
+  dplyr::mutate(Label = paste0(Het.label, Plt.label, Dir.label)) %>%
+  dplyr::mutate(age = gsub('(.*) (.*)', '\\1', exposure), 
+                sex = gsub('(.*) (.*)', '\\2', exposure))
+
+
+all_resres %>% group_by(group) %>% 
+  dplyr::filter(Het.label=='H', !is.na(`Causal effect estimate`)) %>%
+  summarise(n.sign=n())
+```
+
+
+
