@@ -18,8 +18,8 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [Resume](streamlit/resume). My professional portfolio detailing my experience, availability and different contributions
 
 ##### Machine Learning
+* [DCGAN_digits-generator](Python/DCGAN_digits-generator). Implementation of a Deep Convolutional Generative Adversarial Network (DCGAN) in PyTorch to generate realistic handwritten digit images using the MNIST dataset
 * [ML algorithms from scratch](Python/ML_implementations). Just for learning I implement different machine learning algorithms (LR, NN, PCA...) without using specific packages for them
-
 ---
 
 ### R-programming 🇷
