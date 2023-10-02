@@ -1,0 +1,272 @@
+---
+title: 'Ancestry based on genotype likelihoods'
+author: "Gerardo José Rodríguez"
+date: "2022-10-02"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Table of Contents
+[ 1A) Identify the ancestral populations ]  
+[ 1B) What is the average estimated Chinese ancestry of the African Americans? ]  
+[ 2A) Write the likelihood model ]  
+[ 2B) Lets first look at the first African American individual (ASW NA19818) ]  
+[ 2C) Implement the likelihood model for ASW NA19818 ]  
+[ 2D) Make a likelihood ratio test for ASW NA19818]  
+[ 2E) Perform the same test on the other African American individuals  ]  
+
+
+<br />  
+<br />  
+<br />
+<br />
+
+# 2.1) Estimate allele frequencies and ancestral proportions
+
+The individuals are admixed so we cannot use the normal EM-algorithm to obtain allele frequencies.
+Therefore, we need to use NGSadmix which will estimate both admixture proportions and allele frequencies for each ancestral population. We will use the estimated ancestral allele frequencies and
+admixture proportions using NGSadmix analysis and assuming 3 ancestral populations with the following command. I, however, have provided already the output of this command, so you do not need to run it.
+
+```{bash eval=FALSE}
+#set paths
+GL_file=/isdata/othergrp/albrecht/scratch/phdcourse/admixture/data/input.gz
+NGSadmix=/isdata/othergrp/albrecht/scratch/phdcourse/prog/angsd/misc/NGSadmix 
+#run
+NGSadmix -likes $GL_file -K 3 -P 3 -minMaf 0 -o assign3 -s 1
+
+# We will need later the input info
+gunzip input.gz
+```
+
+Both the ancestry (.qopt) and minor allele frequency (.fopt.gz) output will contain 3 columns - one for each ancestral populations. For this assignment we ignore the issues of the native American ancestry in the Mexicans being model as Chinese ancestry.
+
+<br />  
+<br />
+
+## 1A) Identify the ancestral populations 
+
+Following the designation considered in previous class assignments:
+
+ASW	HapMap African ancestry individuals from SW US
+CEU	European individuals
+CHB	Han Chinese in Beijing
+YRI	Yoruba individuals from Nigeria
+MXL	Mexican individuals from LA California
+
+There are 3 ancestries considered, which have some of these populations associated: European (CEU), African (ASW, YRI) and Asian ancestries (CHB). Now, we load the data from the NGSadmix analysis involving MAFs estimates (.fopt file) and the known ancestry populations (.qopt file). Additionally we count with population mtainformation (pop.info file)  
+
+```{r}
+# Load the fopt, qopt and sample info files
+mafs = read.delim('NGSadmix.fopt.gz', sep='', header = F) 
+ancs = read.delim('NGSadmix.qopt', sep='', header=F)
+info = read.delim('pop.info', sep='', header = F, col.names = c('pop', 'sample'))
+
+# Infer ancestry lineage (colnames) by iterating known-ancestry populations
+anc.pop_vr = list('European'='CEU', 'East Asian'='CHB', 'West African'=c('ASW','YRI')) 
+for (n in 1:length(anc.pop_vr)){
+  col_n = which.max(colSums(ancs[info==anc.pop_vr[[n]],]))
+  colnames(ancs)[col_n] = names(anc.pop_vr)[[n]]
+  colnames(mafs)[col_n] = names(anc.pop_vr)[[n]]
+}
+
+# Report column names (ancestral populations)
+paste0('col', 1:ncol(ancs), ': ', colnames(ancs))
+```
+
+
+
+## 1B) What is the average estimated Chinese ancestry of the African Americans?
+The African American individuals have been estimated with a small average Chinese ancestry proportion (~0.01)
+```{r}
+print(paste0('Average Chinese ancestry of African Americans: ',
+             round(mean(ancs[info$pop=='ASW', 'East Asian']),4)))
+```
+
+
+
+# 2.2) Chinese ancestry in African Americans
+
+## 2A) Write the likelihood model 
+
+Assuming K source populations, we can define a likelihood functions based on 1 individual (i) and 1 diallelic locus (j) using the next information:
+
+· $Q^i = (q_1^i,...,q_K^i)$. Admixture proportions matrix (we will make it for k=1)
+
+· $F^j = (f_i^j,...,f^j_K)$: Allele frequencies (based on the minor allele)
+
+· $G_{ij} \in \{0,1,2\}$: Genotype of i in j; homozygote for one allele (0), for the other (2) or heterozygous (1).
+
+\
+
+The genotypes ($G_{ij}$) are unkwown, we instead have genotype likelihoods. However, the other two objects were given as output by NGSadmix. We define them for each of our two models, which are:
+
+· $H_0: K=3 \ \ \ \ \ American,\ European,\ Asian$
+
+· $H_1: K=2 \ \ \ \ \ American,\ European$
+
+Here are computationally defined these objects/matrices: 
+
+```{r}
+# Alternative model matrices
+altF = mafs # F
+altQ = ancs # Q
+
+# Null model matrices
+nullF = altF[,c(1,2)]
+nullQ = data.frame('West African'=ancs$`West African`,
+                    'European'= rowSums(ancs[,c(2,3)]))
+``` 
+
+The allele-reference probability, $h$, can be estimated for each individual/site (i,j) over all the ancestries (K) based on the frequency matrix values ($f$) and the ancestry proportions ($q$) present in the already mentioned matrices admixture porportion ($Q$) and allele frequencies ($F$) matrices. 
+
+$$p(allele|Q^i,F^j) =  h^{ij}= q^i_1 f_1^j +...+q_K^i f_K^j$$
+
+
+The genotypes of each site/individual ($G_{ij}$) are unknown. $h$ can be used to determine these genotype probabilities ($p(G_{ij} | Q^i,F^j$) assuming the Hardy-Weinberg equilibrium:
+
+
+
+$$p(G_{ij} | Q^i,F^j) =  \begin {cases}  (h^{ij})^2,\ G_{ij}=2 \\ 2h^{ij}(1-h^{ij}),\ G_{ij}=1 \\ (1-h^{ij})^2,\ G_{ij}=0  \end{cases} $$
+
+The whole function is coded in the next way:
+
+```{r}
+# We develop a function that we can use for the different cases
+get_genos_probs = function(Q_mtx, F_mtx){
+  prob_genos = sapply(1:nrow(Q_mtx), function(i){
+    
+    # Estimate allele frequency (h)
+    h=rowSums(mapply(function(colF, colQ){colF*colQ}, F_mtx, Q_mtx[i,]))
+    
+    # Estimate genotype probs. (HWE)
+    genos_probs_i = data.frame('0'=(1-h)^2,
+                              '1'=2*h*(1-h),
+                              '2'=h^2)
+  }, simplify = F)
+  
+  # Bind all (in case there are more than 1 individuals)
+  prob_genos = do.call(rbind, prob_genos)
+}
+```
+
+We do not possess observed genotypes in our data. For that reason, in order to estimate the likelihood of the data (X): P(X|Q,F), it is required to use the genotype likelihoods given to NGSadmix as input ($ p(X_{ij}|G_{ij})$) and the estimated genotype probabilities already mentioned: $p(G_{ij}|Q^i,F^j)$. The original calculus would require us to do sums over each potential genotype ($ G_{ij}$) and multiplications within each individual (i, in total:N) and site (j, in total: M).
+
+$$P(X|Q,F) = \prod_i^N \prod_j^M \sum_{G_{ij}\in\{0,1,2\}} \ p(X_{ij}|G_{ij})*p(G_{ij}|Q^i,F^j)$$
+
+Neverthless, we only have to apply this model for 1 individual (N=1). Additionally, the values are stored in log-format. Thus, the applied formula is the next one:
+
+$$P(X|Q,F) \propto log_e(P(X|Q,F)) = \sum^M_j log_e(\sum_{G_{ij}\in\{0,1,2\}} p(X_{ij}|G_{ij})*p(G_{ij}^d|Q^i,F^j))$$
+
+```{r}
+# Describe the data we are using
+genos_lhs = read.delim('input_genoLHs', header=T, sep='\t')
+
+# This is our formula for obtaining the likelihood for 1 individual
+get_lik_ind = function(id_ind, genos_lhs, Q_mtx, F_mtx, info){
+  
+  # Subset the data for the individual to study 
+  i = which(info[,2] == id_ind)  
+  genos_lhs.i = genos_lhs[,make.names(rep(paste0('Ind', i-1),3), unique=T)]
+  genos_probs.i = get_genos_probs(Q_mtx[i,], F_mtx)
+  
+  # In case there are multiple individuals make both matrices same size
+  genos_lhs.i = genos_lhs.i[rep(seq_len(nrow(genos_lhs.i)),
+                                each = nrow(genos_probs.i)/nrow(genos_lhs.i)),]
+
+  # Perform the formula (using log-values) 
+  sum(log(rowSums(genos_lhs.i*genos_probs.i)))
+}
+```
+
+
+
+## 2B) Lets first look at the first African American individual (ASW NA19818) 
+
+The estimated admixture proportions remain similar. In specific, this individual presents a very low (estimated) East Asian ancestral proportion for the admixture model computed with K=3. 
+
+```{r}
+# Alternative model admixture proportion 
+altQ[info$sample=='NA19818',]
+
+# Null model admixture proportion
+nullQ[info$sample=='NA19818',]
+```
+
+<br />  
+<br />
+
+## 2C) Implement the likelihood model for ASW NA19818
+**and calculate the log likelihood under the null and the alternative for the first individual using the genotype likelihoods and the estimated ancestral allele frequencies from the NGSadmix analysis.**
+
+Now we are gonna actually perform the function and calculate the genotype likelihoods for the first individual (i=	NA19818) considering these two models:
+
+· $H_0$: Q with K=2 (European and African)
+
+· $H_1$: Q with K=3 (European, Chinese and African)
+
+As expected due to the low difference between the admixture proportions between the two models, the log-likelihoods seems very similar. However, we will need a hypothesis testing in order to confirm this.
+```{r}
+null.lik_na19818 = get_lik_ind('NA19818', genos_lhs, nullQ, nullF, info)
+alt.lik_na19818 = get_lik_ind('NA19818', genos_lhs, altQ, altF, info)
+
+# Report the results
+cat(paste0('Null model logLH: ', null.lik_na19818, '\n',
+           'Alt. model logLH: ', alt.lik_na19818))
+```
+
+
+
+## 2D) Make a likelihood ratio test for ASW NA19818
+(see below) to test whether this individual has a significant amount
+of Chinese ancestry. Report the conclusion and the p-value.
+
+The likelihood ratio test is computationally defined. First of all, the LR statistic is calculated based on the log-LH (log-likelihoods) obtained for each model, the null and the alternative/more-complex model:
+
+$$ LR = -2*(null.logLH - alt.logLH) \sim \chi(1)$$
+
+The resulting statistic approximately follows a chi-square distribution with one degree of freedom (which is the difference in the number of parameters of the two models). For that reason we can perform this test in order to determine a p-value. The function is defined here: 
+
+```{r}
+LR_models_test = function(ind_id){
+  null.loglh = get_lik_ind(ind_id, genos_lhs, nullQ, nullF, info)
+  alt.loglh = get_lik_ind(ind_id, genos_lhs, altQ, altF, info)
+  
+  LR = -2*(null.loglh-alt.loglh)
+  1-pchisq(LR, df=ncol(altQ)-ncol(nullQ))
+}
+```
+
+Next, the likelihood ratio test (LRT) is performed for one particular example case (sample with ID: NA19818). Considering a significance level of $\alpha=0.05$ the result is not significant, thus the null hypothesis is not rejected. As we expected from our previous observations, the individual presents a non-significant amount of Chinese ancestry based on the LRT. 
+
+```{r}
+# Perform the LR test for the individual
+paste0('P-val of LR-test in NA19818: ', LR_models_test('NA19818'))
+```
+
+
+
+
+## 2E) Perform the same test on the other African American individuals 
+
+Considering a significance level of $\alpha=0.05$, there are four significant results (NA19819, NA19625, NA19701, NA19904). Based on this test, the consideration of the East Asian ancestry in the calculus may benefit the fit of the model for these samples, which present a "significant proportion amount" of Chinese ancestry.
+
+```{r}
+# Obtain the likelihoods ratio test on all ASW samples
+asw_ids = info[info$pop=='ASW',]$sample
+asw_pval = sapply(asw_ids, LR_models_test)
+
+# Report the significant p-values 
+print(asw_pval[asw_pval<0.05])
+```
+
+## 2.3) Likelihood ratio test
+The statistic in a likelihood ratio test is simply two times the difference of log likelihoods https:
+//en.wikipedia.org/wiki/Likelihood-ratio_test#Use. The test statistic can be converted into a p-value based on a chi square statistics i.e.
+LR <- -2 *(logLikeNull - logLikeAlt)
+pvalue <- 1 - pchisq(LR,df=1) df is the degree of freedom which is the difference in the number of estimated parameters in the two models which is this case is 1. Because your parameter is on the border or its domain i.e. Qchinese=0, the assumptions of the test is violated. However, this violation will have very little impact in this scenario and we therefore ignore it.
