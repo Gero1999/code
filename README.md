@@ -27,6 +27,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [postGWAS comparison](R/postGWAS) Cleaning and standarization of multiple summary statistics as well as a genetic correlation and pathway analysis contrast (In Progress)
 * [GWAS-Catalog download](R/GWAS-Catalog-Download). Download, cleaning and standarization of multiple GWAS-Catalog summary statistics based on a search pattern and a LD reference panel.
 * [EM-Algorithm for allele frequency estimation](R/EM-HAF). Estimation of the allele frequencies in a haploid organism's genome using an EM algorithm based on genotype likelihoods.
+* [Ancestry Estimation using Genotype Likelihoods](R/GenoLH-Ancestry). This project focuses on estimating the ancestral populations in African American individuals using a likelihood model based on genotype likelihoods and estimated ancestral allele frequencies from NGSadmix analysis.
 * [Mendelian Randomization](R/Mendelian_Randomization) Automatized causal analyses of pairwise phenotype comparisons based on summary statistics performing IVW, Egger and Weighted Median. Includes quality plots.
 
 ##### Transcriptomics
