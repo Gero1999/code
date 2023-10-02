@@ -1,0 +1,136 @@
+---
+title: "Allele Frequency Estimation with the EM algorithm"
+author: "Gerardo José Rodríguez"
+date: "2022-09-16"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Table of Contents
+[ The Data]
+[ 1) The Likelihood Model]  
+[ 2) The EM algorithm]  
+[ 3) Implementation to estimate the allele frequencies]  
+
+
+# General description
+ The plan of this project is to deploy an EM algorithm that using the Genome Analysis ToolKit (GATK) mathematical analysis towards the genome is capable of inferring in an haploid organism (such as a yeast) the allele frequencies of each genome site and produce base estimates.
+
+
+# The data
+```{r}
+dat <- read.delim("yeast.mpileup",as.is=T,comment.char="",head=F)
+
+# Subset the columns that are for the individuals' bases and the quality scores
+sub_dat = dat[,sapply(dat, class)=='character' & c(1:ncol(dat))>4]
+colnames(sub_dat) = paste0(c('B', 'Q'), rep(1:(ncol(sub_dat)/2), each=2))
+head(sub_dat,n = 3)
+```
+
+
+# 1) The Likelihood Model
+
+We define the genotype likelihood as the one that uses Genome Analysis ToolKit (GATK).Given some particular genotype (Z=z) the probability that some data X of a specific individual (i) in a particular site (j) is proportional to the product of the probability of a read-base ($b_d$) given the genotype. This operation has to be done for all the reads, which means that the product-multiplications are as long as the depth (D)
+
+$$p(X_{i,j} | Z=z) \propto \prod_{d=1}^{D} p(b_d |Z=z)$$
+To calculate this base (given the genotype) probability we use the error base of a particular read ($\epsilon_d$) consider if the base agrees with the genotype assumed (z, take into consideration that we are studying haplotype organisms). If it is, then the error's complement is used (1-$\epsilon_d$). If it is not, then the error is divided by the number of the rest of possible cases ($\epsilon_d/3$). 
+
+
+$$P(b_d |Z=z) =  \begin {cases} 1 - \epsilon_d, b_d = z \\ \frac{\epsilon_d}{3}, b_d \neq  z  \end{cases} $$
+
+From our data these errors are obtained from the base quality scores. In order to calculate them it is only needed to be considered the transformation of the ASCII format and the posterior obtention of a probability from the phred quality score (Q) associated with the read. 
+
+$$\epsilon_d = 10^{-Q_d/10} $$
+
+```{r}
+# Transforms an ASCII representing a phred-quality-score into an error probability
+phred_error<-function(x){
+y <- utf8ToInt(x) ## ascii to integer
+Q = y -33 #offset
+return(10^(-Q/10))
+}
+
+# Generates the likelihoods of each genotype (gA, gC, gG, gT) 
+# for each site (1-4397) in each individual (1-7)
+lik_ind = lapply(1:7, FUN=function(ind){
+         
+         # Iterate over each of the individual's columns
+         bases = sub_dat[,paste0('B', ind)]
+         qualities = sub_dat[,paste0('Q', ind)]
+         
+         # Make vectors for the bases and the qualities. 
+         bases = strsplit(bases, '')
+         qualities = strsplit(qualities,'')
+         
+         # Transform the base qualities into error-probabilities
+         errors = lapply(qualities, \(x) sapply(x, phred_error))
+         
+         # Iterate over each quality/base pair to determine genotype's (haploid) LHs
+           lik_list = mapply(FUN = function(base, error){
+             sapply(c('A', 'C', 'G', 'T'), 
+                    \(b) prod(ifelse(base==b, 1-error, error/3))
+                  )}, bases, errors, SIMPLIFY = F)
+         
+         # Return the likelihoods as a dataframe
+         return(do.call(rbind, lik_list))
+       })
+```
+
+<br />  
+<br />
+
+# 2) The EM algorithm
+
+The purpose for the EM algorithm on this exercise is to determine the final allele frequencies of each site ($f_j^{n+1}$) by runnning $n$ iterations:
+
+a) In the expectation step for each individual it is calculated the expected genotype likelihood for a site ($Q_i(Z_j)$) simply following the next formula and using the notation previously mentioned.
+
+$$Q_i(Z_j)=P(Z_j | X_i, f^{(n)})=\frac {P(X_i|Z_j, f^{(n)})P(Z_j| f^{(n)})}{\sum_{j'}P(X_i|Z_{j'}, f^{(n)}) P(Z_{j'} | f^{(n)})}$$
+b) Consecutively, the algorithm performs the maximization step in order to determine the allele frequencies the expectations are used. and divided. All individuals are considered for each site, and then considered in the final calculation to obtain only one frequency for this site in this way.
+
+
+$$f_j^{n+1}=\frac{\sum_i Q_i(Z)}{\sum_i \sum_{j'} Q_i(Z_{j'})}$$
+
+```{r}
+# EM algorithm. Takes as input a vector indicating allele-frequency estimates (pk)
+# and a dataframe of likelihoods (site_liks) representing each genotype by column and each 
+# individual by row. The output is a new allele-frequence estimate vector.
+EM = function(site_liks, pk){
+  ## Expectation-step
+  site_w = t(t(site_liks)*pk)                  # Q(Z=z)
+  pGeno = site_w/rowSums(site_w)               # P(Z|X,f^n)
+  ## Maximization-step
+  pkNew = colSums(pGeno)/sum(colSums(pGeno))   # f^(n+1)
+  return(pkNew)
+}
+``` 
+
+# 3) Implementation to estimate the allele frequencies 
+
+```{r}
+# Estimate allele frequencies for each site
+al_freqs = lapply(1:nrow(dat), function(site){
+  
+  # Prepare initial input for EM algorithm
+  site_liks = do.call(rbind, lapply(lik_ind, \(like_i) like_i[site,]))
+  pk = c(0.25, 0.25, 0.25, 0.25)
+  
+  # Run until convergence or reach the max number of iterations (5)
+  for (i in 1:5){
+    pkNew = EM(site_liks, pk)
+    if (all(pkNew==pk)){break}
+    else{pk = pkNew}
+  }
+  return(pkNew)
+})
+
+
+# Transform the results into a dataframe
+al_freqs = do.call(rbind, al_freqs)
+rownames(al_freqs) = rownames(dat)
+head(al_freqs)                      # Show part of the data
+```
