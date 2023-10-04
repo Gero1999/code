@@ -5,14 +5,14 @@
 <!-- PROJECT LOGO -->
 <br />
 <div align="center">
-  <a href="https://github.com/othneildrew/Best-README-Template">
-    <img src="RNAm.png" alt="Logo" width="140" height="80">
+  <a href="">
+    <img src="icon.jpg" alt="Logo" width="100" height="80">
   </a>
 
-  <h3 align="center">Nussinov Algorithm</h3>
+  <h3 align="center">Pharmaceutical names generator</h3>
 
   <p align="center">
-    Unleash RNA's secret dance of bonds and folds
+    Give it a start and it will generate a name for your product!
     <br />
     <a href="https://github.com/Gero1999/code/edit/main/Python/HMM_profile_analyser"><strong>Explore the docs »</strong></a>
     <br />
