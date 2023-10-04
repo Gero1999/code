@@ -18,7 +18,8 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [Resume](streamlit/resume). My professional portfolio detailing my experience, availability and different contributions
 
 ##### Machine Learning
-* [DCGAN_digits-generator](Python/DCGAN_digits-generator). Implementation of a Deep Convolutional Generative Adversarial Network (DCGAN) in PyTorch to generate realistic handwritten digit images using the MNIST dataset
+* [DCGAN digit-image generator](Python/DCGAN_digits-generator). Implementation of a Deep Convolutional Generative Adversarial Network (DCGAN) in PyTorch to generate realistic handwritten digit images using the MNIST dataset
+* [Text generator (Pharmaceutical names)](). Process a variable length input and completes it with characters to create a potential pharmaceutical product name
 * [ML algorithms from scratch](Python/ML_implementations). Just for learning I implement different machine learning algorithms (LR, NN, PCA...) without using specific packages for them
 ---
 
@@ -38,7 +39,6 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [Protein Variant Analysis](R/Protein-Variant-Analysis). Analysis and study figures that can be performed over a set of translated DNA coding sequences. 
 
 ##### Shiny Apps
-
 * [Texas Cheater](shinyR/texas-cheater) A Texas Poker simulator capable to predict your probabilities to win a game based on your game circumstances.
 * [Pairwise Alignment](shinyR/pairwise_alignment). Assess the alignemnt of two sequences thorugh dinamyc programming (Watermann algorithm).
 
