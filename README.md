@@ -19,7 +19,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 
 ##### Machine Learning
 * [DCGAN digit-image generator](Python/DCGAN_digits-generator). Implementation of a Deep Convolutional Generative Adversarial Network (DCGAN) in PyTorch to generate realistic handwritten digit images using the MNIST dataset
-* [Text generator (Pharmaceutical names)](Python/Names_generator). Process a variable length input and completes it with characters to create a potential pharmaceutical product name
+* [Text generator (Pharmaceutical names)](Python/Names_generator). Neural Network implemented with TensorFlow. Process a variable length text-input and completes it with characters to create a pharmaceutical product name
 * [ML algorithms from scratch](Python/ML_implementations). Just for learning I implement different machine learning algorithms (LR, NN, PCA...) without using specific packages for them
 ---
 

@@ -57,7 +57,7 @@ Once trained, the model will be able to produce an output based on a variable-in
 ### Built With
 
 * [TensorFlow]()
-* [sklear]()
+* [sklearn]()
 * [matplotlib]()
 
 <p align="right">(<a href="#top">back to top</a>)</p>

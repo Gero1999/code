@@ -2,7 +2,7 @@
 title: "proteins"
 author: "Gerardo José Rodríguez"
 date: "2022-10-26"
-output: html_document
+output: rmarkdown::github_document
 ---
 
 ```{r setup, include=FALSE}
@@ -13,7 +13,7 @@ library(ggplot2)
 library(tidyverse)
 ```
 ---
-title: "proteins"
+title: "Protein Variant Analysis"
 author: "Gerardo José Rodríguez"
 date: "2022-10-26"
 output: html_document
@@ -27,7 +27,7 @@ library(ggplot2)
 library(tidyverse)
 ```
 
-## R Markdown
+## A Protein Variant Analaysis workflow using Biostrings
 Lets consider a native sequence and make a mutagenesis library. For that we will need a random-substitution function.
 
 ```{r}
@@ -75,62 +75,34 @@ resFreqPerPos(prot_set)
 
 # Determine each residue-pair substitution frequence
 ```{r}
-# I CREATED TWO POTENTIAL FUNCTIONS. THE SECOND ONE IS ALMOST 5x FASTER, BUT DO NOT CREATE STANDARD TABLES (ONLY NECESSARY AMINOACIDS WITH AT LEAST ONE COUNT)
 nat_prot = translate(nat)
 
-subMtx = function(prot_set, nat_prot){
-  # Create a count pair-matrix
-  sub_mtx = matrix(0, nrow=length(AA_ALPHABET), ncol=length(AA_ALPHABET),
-                   dimnames=list(AA_ALPHABET, AA_ALPHABET))
-  # Find the residue-pairs in the substitutions and summarize them in a table
-  pairs = table(unlist(sapply(prot_set, function(prot){
-    pos = which(as.integer(nat_prot)!=as.integer(prot), useNames = T)
-    paste0(as.vector(nat_prot[pos]), as.vector(prot[pos]))
-  })))
-  # Fill the matrix values with the correspondant counts for each pair
-  for (p in 1:length(pairs)){
-    sub_mtx[substr(names(pairs)[p],1,1), substr(names(pairs)[p],2,2)] = pairs[p]
-  }
-  sub_mtx
-}
-
-subMtx2 = function(prot_set, nat_prot=NULL){
+subMtx = function(setSeqs, wildSeq=NULL){
   
-  # Create a consensus protein (in case is not given)
-  if (is.null(nat_prot)){nat_prot=consensusString(prot_set)}
+  # Determine if there is a DNA or protein set
+  if(class(setSeqs)=='AAStringSet'){alphabet=AA_ALPHABET}
+  else if(class(setSeqs)=='DNAStringSet'){alphabet=DNA_ALPHABET}
+  else{return(print('Introduce a Biostrings AAStringSet/DNAStringSet'))}
   
-  # Align sequences and find all mismatches. Reshape the object in a mtx
-  prot_set_aligned = pairwiseAlignment(prot_set, nat_prot) 
-  sub_mtx = mismatchSummary(prot_set_aligned)$subject %>%
+  # Create a consensus sequence (in case is not given)
+  if (is.null(wildSeq)){wildSeq=consensusString(setSeqs)}
+  
+  # Align its sequence with the variants set
+  setSeqs_aligned = pairwiseAlignment(setSeqs, wildSeq)
+  
+  # Align sequences and find all mismatches. Group substitutions together
+  AAtoAA = mismatchSummary(setSeqs_aligned)$subject %>%
     group_by(Subject, Pattern) %>%
-    summarize(Count=sum(Count)) %>%
-    xtabs(data=., formula=Count~Subject+Pattern)
-    AAtoAdd_row = setdiff(AA_ALPHABET, rownames(sub_mtx))
-    AAtoAdd_col = setdiff(AA_ALPHABET, colnames(sub_mtx))
-    sub_mtx[AAtoAdd_row,] = 0
-    sub_mtx[AAtoAdd_row,] = 0
-    rbind(sub_mtx, matrix(0, nrow=length(AAtoAdd), ncol=ncol(sub_mtx),
-                       dimnames=list(AAtoAdd, 1:ncol(sub_mtx))))
-  }
-
-dim(subMtx(prot_set, nat_prot))
-dim(subMtx2(prot_set, nat_prot))
+    suppressWarnings(summarize(Count=sum(Count))) 
+    
+  # Create a substitution matrix and fill it with the substitution counts
+  sub_mtx = matrix(data=0, nrow=length(alphabet), ncol=length(alphabet), 
+                   dimnames = list(alphabet, alphabet))
+    
+  sub_mtx[cbind(AAtoAA$Subject, AAtoAA$Pattern)] = AAtoAA$Count
+  return(sub_mtx)
+}
 ```
-
-## Make some relevant plots of the results
-```{r}
-library(pheatmap)
-# Heatmap of pair-substitution frequence
-heatmap(subMtx2(prot_set, nat_prot)[AA_STANDARD, AA_STANDARD], 
-        Rowv = NA, Colv = NA)
-
-pheatmap(subMtx2(prot_set, nat_prot)[AA_STANDARD, AA_STANDARD])
-
-# Heatmap of residue presence per position
-heatmap(resFreqPerPos(prot_set),
-        Rowv = NA, Colv = NA)
-```
-
 
 
 Now we would like to extract some information from these sequences. Let's see if we can create a function identyfying the mismatches between two sequences
