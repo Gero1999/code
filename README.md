@@ -30,6 +30,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [GWAS-Catalog download](R/GWAS-Catalog-Download). Download, cleaning and standarization of multiple GWAS-Catalog summary statistics based on a search pattern and a LD reference panel.
 * [EM-Algorithm for allele frequency estimation](R/EM-HAF). Estimation of the allele frequencies in a haploid organism's genome using an EM algorithm based on genotype likelihoods.
 * [Ancestry Estimation using Genotype Likelihoods](R/GenoLH-Ancestry). This project focuses on estimating the ancestral populations in African American individuals using a likelihood model based on genotype likelihoods and estimated ancestral allele frequencies from NGSadmix analysis.
+
 * [Mendelian Randomization](R/Mendelian_Randomization) Automatized causal analyses of pairwise phenotype comparisons based on summary statistics performing IVW, Egger and Weighted Median. Includes quality plots.
 
 ##### Transcriptomics
@@ -38,6 +39,9 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 
 ##### Proteomics
 * [Protein Variant Analysis](R/Protein-Variant-Analysis). Analysis and study figures that can be performed over a set of translated DNA coding sequences. 
+
+#### Bayesian and MCMC methods
+* [Predict doctor visits with Poisson]. Posteriors for Poisson regressions can be used to predict the number of visits of a patient considering their age and health state. The model was created with rJAGS.
 
 ##### Shiny Apps
 * [Texas Cheater](shinyR/texas-cheater) A Texas Poker simulator capable to predict your probabilities to win a game based on your game circumstances.

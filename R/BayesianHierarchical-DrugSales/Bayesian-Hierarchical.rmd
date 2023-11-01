@@ -1,0 +1,146 @@
+---
+title: "Hierarchichal modeling to evaluate monthly differences in the number of sold anxyolitics"
+author: "Gerardo"
+date: "2023-10-10"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(COUNT)
+library(rjags)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+```
+
+
+## Introduction to the problem
+The purpose is to compare if the quantities of anxyolitic drugs registered in pharmacies is higher during the entry of winter (December) than in the middle-year (June)
+
+## Data
+
+It was originally obtained from Kaggle, Involves hourly/monthly/yearly USA data from 2014-2019 reporting sales in 8 different pharmaceutical types of products. For more information you can access the next link: 
+
+https://www.kaggle.com/datasets/ybifoundation/pharma-drug-sales  
+
+
+```{r, echo=FALSE}
+df = vroom::vroom('PharmaDrugSales.csv.gz')
+head(df)
+```
+
+
+
+Adapt the dataset to work with it easily
+```{r, echo=FALSE}
+# Make one common column for all drugs
+data = pivot_longer(df, cols = names(df)[7:14], names_to = 'drug') %>% 
+  filter(!value==0) %>% # Discard rows where the drug was not bought
+  mutate(Month=as.integer(Month), Year=as.numeric(Year)) %>%
+  na.omit()
+head(data)
+```
+
+
+
+```{r, echo=FALSE}
+unique(data$Year)
+
+data = data %>% filter(drug %in% c('Antihistamines', 'AnxiolyticDrugs', 'SalicylicAcidDerivatives')) 
+```
+
+Based on the data most pharmaceuticals present many outliers and not that clear differeces in their medians. Although October (month 10) seems clearly differentiated from the others for Anviolytic drugs. Let's see what happens when we inspect the summed absolute values:
+
+```{r, echo =FALSE}
+sum_data = data %>% group_by(Month, drug) %>% 
+  summarize(total_val = sum(value),
+            avg_val = mean(value))
+
+ggplot(sum_data, aes(x=Month, y=total_val,  group=Month))+
+  geom_col()+
+  ylab('Drugs sold')+
+  facet_wrap(~drug)+
+  theme_minimal()
+```
+
+
+Here the difference seems more blatant, specially for anxyolitic drugs. What if we use a Hierarchical Bayesian model to model the distributions?
+
+
+## Model
+
+Let's perform now the JAGS simulation. We assume a gamma prior based on alpha and beta hyperparameters. They two are generating our expected number of drugs saled per month (lambda). Our lambda prior will be the average number sold registered.
+
+```{r, echo=FALSE}
+mean(sum_data$avg_val)
+mean(data$value)
+sd(data$value)
+
+dat = data %>% dplyr::filter(drug=='AnxiolyticDrugs') %>% select(Month, value) 
+```
+
+
+```{r, echo=FALSE}
+model = " model {
+for (i in 1:length(value)) {
+  value[i] ~ dpois(lam[Month[i]])
+}
+
+for (j in 1:max(Month)) {
+  lam[j] ~ dgamma(alpha, beta)
+}
+
+alpha = mu^2 / sig^2
+beta = mu / sig^2
+
+mu ~ dgamma(1.4, 2.0)
+sig ~ dexp(1.0)
+
+} "
+
+set.seed(1)
+data_jags = as.list(dat)
+params = c("lam", "mu", "sig")
+
+mod = jags.model(textConnection(model), data=dat, n.chains=2)
+update(mod, 1e3)
+
+mod_sim = coda.samples(model=mod,
+                       variable.names=params,
+                       n.iter=5e3)
+mod_csim = as.mcmc(do.call(rbind, mod_sim))
+
+## convergence diagnostics
+#plot(mod_sim)
+#autocorr.plot(mod_sim)
+effectiveSize(mod_sim)
+
+## compute DIC
+dic = dic.samples(mod, n.iter=1e3)
+```
+
+
+There does not seem to be any autoccorelation and the effective sample size is large. It seems the model has indepedent variables. 
+
+
+
+## Results: Odds and histograms comparison
+
+What is the probability that an anxyolitic drug will be sold more in December than in January?
+```{r, echo=FALSE}
+n_sim=nrow(mod_csim)
+y_predJan = rpois(n=n_sim, lambda=mod_csim[,"lam[6]"])
+y_predDec = rpois(n=n_sim, lambda=mod_csim[,"lam[12]"])
+
+# Odds ratio
+print(paste0('Odds ratio: ', sum(y_predJan<y_predDec)/sum(y_predJan>y_predDec)))
+
+#hist(y_predJan)
+#hist(y_predDec)
+```
+
+## Conclusion
+
+The odds ratio that in December are more medicines sold than in June is practically 1. The distributions also seem to be very similar. Thus, we cannot strongly declare the market differences in anxyolitic drugs between the two months.
+
