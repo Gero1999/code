@@ -1,0 +1,511 @@
+---
+title: "Bayesian-TimeSeries"
+author: "Gerardo José Rodríguez"
+date: "2023-11-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+set.seed(2001)
+t = 1:200
+y_white_noise = rnorm(length(t), 0, 1)
+
+# Instead of manipulating vectors separately you can create a time-series object
+yt = ts(y_white_noise, start=c(1960,1), frequency=4)
+
+# Plot
+par(mfrow=c(2,1), cex.lab=1.3, cex.main=1.3)
+plot(t, y_white_noise, type = 'l', xlab='time (t)', ylab='Y(t)')
+plot(yt)
+
+```
+
+```{r}
+# Make plots of autocorrelation and partical autocorrelation
+acf(y_white_noise,lag.max = 20, xlab='lag', ylab='Sample ACF')
+pacf(y_white_noise, lag.max = 20, xlab='lag', ylab='Sample PACF')
+```
+
+See how can we perform differencing/smoothing by using a real dataset with seasoned data
+```{r}
+data(co2)
+acf(ts(co2), lag.max = 100)
+pacf(ts(co2), lag.max=100)
+
+# By moving average to remove fects of periodic component with even period d
+co2_ma = filter(co2, filter=c(1/24, rep(1/12,11),1/24), sides = 2)
+plot(co2_ma, main="", ylab='Smooth series')
+acf(co2_ma[!is.na(co2_ma)], lag.max = 100, main='Sample ACF of smoothered series')
+pacf(co2_ma[!is.na(co2_ma)], lag.max = 100, main='Sample PACF of smoothered series')
+
+# By doing 1st and 2nd order differencing to remove effects of trend component
+co2_ma_1stdiff = diff(co2_ma, differences=1)
+co2_ma_2nddiff = diff(co2_ma, differences=2)
+
+plot(co2_ma_1stdiff, main="Smoothed & Detrended (1st diff)")
+plot(co2_ma_2nddiff, main="Smoothed & Detrended (2nd diff)")
+
+```
+
+
+## Play with models
+
+### The AR model (linear)
+
+The higher the random coefficient (typically denoted $\phi$, here is ar) the more random walk behaviour is the process and close to stationary state (although if they reach 1 they stopp being stationary). The lower and more negative the more quasiperiodic.
+```{r}
+yt.ar1 = arima.sim(model = list(ar=0.99), n = 500, sd=sqrt(1))
+yt.ar0 = arima.sim(model = list(ar=0.001), n = 500, sd=sqrt(1))
+yt.arM1 = arima.sim(model = list(ar=-0.99), n = 500, sd=sqrt(1))
+
+# Plot tendencies
+par(mfrow=c(3,1))
+plot(yt.ar1)
+plot(yt.ar0)
+plot(yt.arM1)
+
+# Plot ACF 
+par(mfrow=c(2,1))
+acf(yt.ar1)
+acf(yt.arM1)
+
+# Plot PACF
+par(mfrow=c(2,1))
+pacf(yt.ar1)
+pacf(yt.arM1)
+
+# Use the theoretical phormula to get the autocovariance
+cov_0=sd^2/(1-phi2^2) # compute auto-covariance at h=0
+cov_h=phi2^(0:lag.max)*cov_0 # compute auto-covariance at h
+```
+
+# Getting the AR polynomial
+THe AR polynomial is defiend as: $\phi(u)=1-\phi_1 u - \phi_2 u^2 ... - phi_p u^p$
+with u complex-valued. The AR(p) process is stable if $\phi(u)=0 $ when $|u|>1$. In this case the process is also stationary and can be written as:
+$\phi (u) = \sum^\inf _{j=0} \psi· \epsilon_{t-j}$
+The AR polynomial can be written as: 
+$\phi(u)=\sum^p_{j=1} (1-\alpha_j u)$
+being the reciprocal roots $\alpha_j$, and when stationary $|\alpha|<1 \text{ for all } j$ 
+
+However the AR can also be represented with a state-space representation. The  spectral representation is very simple to compute in r adn tells you the frequency (highest value of the peak, 1/freq) and is also related with the module (how high is the peak): $f(w)= \frac{v}{2\pi |\phi (e^{-iw})|^2}$
+```{r}
+spec.ar(yt, order=2)
+```
+
+And what about computing the reciprocal roots? Well:
+
+```{r}
+##### Compute AR reciprocal roots given the AR coefficients
+###########################################################
+# Assume the folloing AR coefficients for an AR(8)
+phi=c(0.27, 0.07, -0.13, -0.15, -0.11, -0.15, -0.23, -0.14)
+roots=1/polyroot(c(1, -phi)) # compute reciprocal characteristic roots
+r=Mod(roots) # compute moduli of reciprocal roots
+lambda=2*pi/Arg(roots) # compute periods of reciprocal roots
+# print results modulus and frequency by decreasing order
+print(cbind(r, abs(lambda))[order(r, decreasing=TRUE), ][c(2,4,6,8),]) 
+```
+
+### AR with pair of complex-valued reciprocal roots (ACF & PACF)
+Rcode to simulate data from an AR(2) with one pair of complex-valued reciprocal roots and plot the corresponding sample ACF and sample PACF 
+
+```{r}
+## simulate data from an AR(2)
+set.seed(2021)
+## AR(2) with a pair of complex-valued roots with modulus 0.95 and period 12 
+r=0.95
+lambda=12 
+phi=numeric(2) 
+phi[1]<- 2*r*cos(2*pi/lambda) 
+phi[2] <- -r^2
+phi
+T=300 # number of time points
+sd=1 # innovation standard deviation
+yt=arima.sim(n=T, model = list(ar = phi), sd=sd)
+
+par(mfrow = c(3, 1), cex.lab = 1.5)
+## plot simulated data 
+ts.plot(yt)
+## draw sample autocorrelation function
+acf(yt, lag.max = 50,
+    type = "correlation", ylab = "sample ACF", 
+    lty = 1, ylim = c(-1, 1), main = " ")
+
+## draw sample partial autocorrelation function
+pacf(yt, lag.ma = 50, main = "sample PACF")
+
+```
+
+### AR with pair of two different real-valued reciprocal roots (ACF & PACF)
+```{r}
+### Simulate from AR(2) with two real reciprocal roots (e.g., 0.95 and 0.5)
+set.seed(2021)
+recip_roots=c(0.95, 0.5) ## two different real reciprocal roots
+phi=c(sum(recip_roots), -prod(recip_roots)) ## compute ar coefficients
+phi
+T=300 ## set up number of time points
+sd=1 ## set up standard deviation
+yt=arima.sim(n=T,model = list(ar=phi),sd=sd) # generate ar(2)
+
+par(mfrow = c(3, 1), cex.lab = 1.5, cex.main = 1.5)
+### plot simulated data 
+ts.plot(yt)
+### plot sample ACF
+acf(yt, lag.max = 50, type = "correlation",  main = "sample ACF")
+### plot sample PACF
+pacf(yt, lag.max = 50, main = "sample PACF")
+```
+
+### AR with one real reciplrocal root and  a pair of complex-valued reciprocal roots (ACF & PACF)
+Rcode to simulate data from an AR(3) with one real reciprocal root and a pair of complex-valued reciprocal roots and plot the corresponding sample ACF and sample PACF 
+```{r}
+### Simulate from AR(3) with one real root 
+### and a pair of complex roots (e.g., r=0.95 and lambda = 12 and real root with
+### 0.8 modulus)
+set.seed(2021)
+r= c(0.95, 0.95, 0.8) ## modulus
+lambda=c(-12, 12) ## lambda
+recip_roots=c(r[1:2]*exp(2*pi/lambda*1i), r[3]) ## reciprocal roots
+phi <- numeric(3) # placeholder for phi
+phi[1]=Re(sum(recip_roots)) # ar coefficients at lag 1
+phi[2]=-Re(recip_roots[1]*recip_roots[2] + recip_roots[1]*recip_roots[3] + recip_roots[2]*recip_roots[3]) # ar coefficients at lag 2
+phi[3]=Re(prod(recip_roots))
+phi
+T=300 # number of time points
+sd=1 # standard deviation
+yt=arima.sim(n=T,model = list(ar=phi), sd = sd) # generate ar(3)
+
+par(mfrow = c(3,1), cex.lab = 1.5, cex.main = 1.5)
+### plot simulated data 
+ts.plot(yt)
+### plot sample ACF
+acf(yt, lag.max = 50, type = "correlation",  main = "sample ACF")
+### plot sample PACF
+pacf(yt, lag.max = 50, main = "sample PACF")
+```
+
+
+## Bayesian inference of AR model
+
+### MLE based on AR(p) conditional likelihood
+Estimate the 2 phi parameters and the variance of the error (v)
+```{r}
+set.seed(2021)
+# Simulate 300 observations from an AR(2) with one pair of complex-valued reciprocal roots 
+r=0.95
+lambda=12 
+phi=numeric(2) 
+phi[1]=2*r*cos(2*pi/lambda) 
+phi[2]=-r^2
+sd=1 # innovation standard deviation
+T=300 # number of time points
+# generate stationary AR(2) process
+yt=arima.sim(n = T, model = list(ar = phi), sd = sd) 
+
+## Compute the MLE for phi and the unbiased estimator for v using the conditional likelihood
+p=2
+y=rev(yt[(p+1):T]) # response
+X=t(matrix(yt[rev(rep((1:p),T-p)+rep((0:(T-p-1)),rep(p,T-p)))],p,T-p));
+XtX=t(X)%*%X
+XtX_inv=solve(XtX)
+phi_MLE=XtX_inv%*%t(X)%*%y # MLE for phi
+s2=sum((y - X%*%phi_MLE)^2)/(length(y) - p) #unbiased estimate for v
+
+cat("\n MLE of conditional likelihood for phi: ", phi_MLE, "\n",
+    "Estimate for v: ", s2, "\n")
+```
+
+
+### How to choose the order of the model?
+The sample ACG and PACF can actually give you the answer. Another mroe sophisticated method is with a two model selection criteria using BIC using the conditional likelihood (thus evaluating of course with the same data)
+```{r}
+###################################################
+set.seed(2021)
+r=0.95
+lambda=12 
+phi=numeric(2) 
+phi[1]=2*r*cos(2*pi/lambda) 
+phi[2]=-r^2
+sd=1 # innovation standard deviation
+T=300 # number of time points
+# generate stationary AR(2) process
+yt=arima.sim(n = T, model = list(ar = phi), sd = sd) 
+
+#############################################################################
+######   compute AIC and BIC for different AR(p)s based on simulated data ###
+#############################################################################
+pmax=10 # the maximum of model order
+Xall=t(matrix(yt[rev(rep((1:pmax),T-pmax)+rep((0:(T-pmax-1)),
+              rep(pmax,T-pmax)))], pmax, T-pmax));
+y=rev(yt[(pmax+1):T])
+n_cond=length(y) # (number of total time points - the maximum of model order)
+
+## compute MLE
+my_MLE <- function(y, Xall, p){
+  n=length(y)
+  x=Xall[,1:p]
+  a=solve(t(x) %*%x)
+  a=(a + t(a))/2 # for numerical stability 
+  b=a%*%t(x)%*%y # mle for ar coefficients
+  r=y - x%*%b # residuals 
+  nu=n - p # degrees freedom
+  R=sum(r*r) # SSE
+  s=R/nu #MSE
+  return(list(b = b, s = s, R = R, nu = nu))
+}
+
+
+## function for AIC and BIC computation 
+AIC_BIC <- function(y, Xall, p){
+  ## number of time points
+  n <- length(y)
+  
+  ## compute MLE
+  tmp=my_MLE(y, Xall, p)
+  
+  ## retrieve results
+  R=tmp$R
+  
+  ## compute likelihood
+  likl= n*log(R)
+```
+
+# Filtering in the NDLM
+```{r}
+
+#################################################
+##### Univariate DLM: Known, constant variances
+#################################################
+set_up_dlm_matrices <- function(FF, GG, VV, WW){
+  return(list(FF=FF, GG=GG, VV=VV, WW=WW))
+}
+
+set_up_initial_states <- function(m0, C0){
+  return(list(m0=m0, C0=C0))
+}
+
+### forward update equations ###
+forward_filter <- function(data, matrices, initial_states){
+  ## retrieve dataset
+  yt <- data$yt
+  T <- length(yt)
+  
+  ## retrieve a set of quadruples 
+  # FF, GG, VV, WW are scalar
+  FF <- matrices$FF  
+  GG <- matrices$GG
+  VV <- matrices$VV
+  WW <- matrices$WW
+  
+  ## retrieve initial states
+  m0 <- initial_states$m0
+  C0 <- initial_states$C0
+  
+  ## create placeholder for results
+  d <- dim(GG)[1]
+  at <- matrix(NA, nrow=T, ncol=d)
+  Rt <- array(NA, dim=c(d, d, T))
+  ft <- numeric(T)
+  Qt <- numeric(T)
+  mt <- matrix(NA, nrow=T, ncol=d)
+  Ct <- array(NA, dim=c(d, d, T))
+  et <- numeric(T)
+  
+  for(i in 1:T){
+    # moments of priors at t
+    if(i == 1){
+      at[i, ] <- GG %*% t(m0)
+      Rt[, , i] <- GG %*% C0 %*% t(GG) + WW
+      Rt[, , i] <- 0.5*Rt[, , i]+0.5*t(Rt[, , i])
+    }else{
+      at[i, ] <- GG %*% t(mt[i-1, , drop=FALSE])
+      Rt[, , i] <- GG %*% Ct[, , i-1] %*% t(GG) + WW
+      Rt[, , i] <- 0.5*Rt[, , i]+0.5*t(Rt[, , i])
+    }
+    
+    # moments of one-step forecast:
+    ft[i] <- t(FF) %*% (at[i, ]) 
+    Qt[i] <- t(FF) %*% Rt[, , i] %*% FF + VV
+    
+    # moments of posterior at t:
+    At <- Rt[, , i] %*% FF / Qt[i]
+    et[i] <- yt[i] - ft[i]
+    mt[i, ] <- at[i, ] + t(At) * et[i]
+    Ct[, , i] <- Rt[, , i] - Qt[i] * At %*% t(At)
+    Ct[, , i] <- 0.5*Ct[, , i]+ 0.5*t(Ct[, , i])
+  }
+  cat("Forward filtering is completed!") # indicator of completion
+  return(list(mt = mt, Ct = Ct, at = at, Rt = 
+                Rt, ft = ft, Qt = Qt))
+}
+
+forecast_function <- function(posterior_states, k, matrices){
+  
+  ## retrieve matrices
+  FF <- matrices$FF
+  GG <- matrices$GG
+  WW <- matrices$WW
+  VV <- matrices$VV
+  mt <- posterior_states$mt
+  Ct <- posterior_states$Ct
+  
+  ## set up matrices
+  T <- dim(mt)[1] # time points
+  d <- dim(mt)[2] # dimension of state-space parameter vector
+  
+  ## placeholder for results
+  at <- matrix(NA, nrow = k, ncol = d)
+  Rt <- array(NA, dim=c(d, d, k))
+  ft <- numeric(k)
+  Qt <- numeric(k)
+  
+  
+  for(i in 1:k){
+    ## moments of state distribution
+    if(i == 1){
+      at[i, ] <- GG %*% t(mt[T, , drop=FALSE])
+      Rt[, , i] <- GG %*% Ct[, , T] %*% t(GG) + WW
+      Rt[, , i] <- 0.5*Rt[, , i]+0.5*t(Rt[, , i])
+    }else{
+      at[i, ] <- GG %*% t(at[i-1, , drop=FALSE])
+      Rt[, , i] <- GG %*% Rt[, , i-1] %*% t(GG) + WW
+      Rt[, , i] <- 0.5*Rt[, , i]+0.5*t(Rt[, , i])
+    }
+    
+    ## moments of forecast distribution
+    ft[i] <- t(FF) %*% t(at[i, , drop=FALSE])
+    Qt[i] <- t(FF) %*% Rt[, , i] %*% FF + VV
+  }
+  cat("Forecasting is completed!") # indicator of completion
+  return(list(at=at, Rt=Rt, ft=ft, Qt=Qt))
+}
+
+## obtain 95% credible interval
+get_credible_interval <- function(mu, sigma2, 
+                                  quantile = c(0.025, 0.975)){
+  z_quantile <- qnorm(quantile)
+  bound <- matrix(0, nrow=length(mu), ncol=2)
+  bound[, 1] <- mu + 
+    z_quantile[1]*sqrt(as.numeric(sigma2)) # lower bound
+  bound[, 2] <- mu + 
+    z_quantile[2]*sqrt(as.numeric(sigma2)) # upper bound
+  return(bound)
+}
+
+####################### Example: Lake Huron Data ######################
+plot(LakeHuron,main="Lake Huron Data",
+     ylab="level in feet") # Total of 98 observations 
+k=4
+T=length(LakeHuron)-k # We take the first 94 observations 
+# only as our data
+ts_data=LakeHuron[1:T]
+ts_validation_data <- LakeHuron[(T+1):98]
+
+data <- list(yt = ts_data)
+
+# First order polynomial model 
+
+## set up the DLM matrices 
+FF <- as.matrix(1)
+GG <- as.matrix(1)
+VV <- as.matrix(1)
+WW <- as.matrix(1)
+m0 <- as.matrix(570)
+C0 <- as.matrix(1e4)
+
+## wrap up all matrices and initial values
+matrices <- set_up_dlm_matrices(FF, GG, VV, WW)
+initial_states <- set_up_initial_states(m0, C0)
+
+## filtering
+results_filtered <- forward_filter(data, matrices, 
+                                   initial_states)
+names(results_filtered)
+
+ci_filtered <- get_credible_interval(results_filtered$mt, 
+                                     results_filtered$Ct)
+
+## forecasting 
+results_forecast <- forecast_function(results_filtered,k, 
+                                      matrices)
+ci_forecast <- get_credible_interval(results_forecast$ft, 
+                                     results_forecast$Qt)
+
+index=seq(1875, 1972, length.out = length(LakeHuron))
+index_filt=index[1:T]
+index_forecast=index[(T+1):98]
+
+plot(index, LakeHuron, ylab = "level", 
+     main = "Lake Huron Level",type='l',
+     xlab="time",lty=3,ylim=c(574,584))
+points(index,LakeHuron,pch=20)
+
+lines(index_filt, results_filtered$mt, type='l',
+      col='red',lwd=2)
+lines(index_filt, ci_filtered[, 1], type='l', 
+      col='red', lty=2)
+lines(index_filt, ci_filtered[, 2], type='l', col='red', lty=2)
+
+
+lines(index_forecast, results_forecast$ft, type='l',
+      col='green',lwd=2)
+lines(index_forecast, ci_forecast[, 1], type='l',
+      col='green', lty=2)
+lines(index_forecast, ci_forecast[, 2], type='l',
+      col='green', lty=2)
+
+legend('bottomleft', legend=c("filtered","forecast"),
+       col = c("red", "green"), lty=c(1, 1))
+
+#Now consider a 100 times smaller signal to noise ratio 
+VV <- as.matrix(1)
+WW <- as.matrix(0.01)
+matrices_2 <- set_up_dlm_matrices(FF,GG, VV, WW)
+
+## filtering
+results_filtered_2 <- forward_filter(data, matrices_2, 
+                                     initial_states)
+ci_filtered_2 <- get_credible_interval(results_filtered_2$mt, 
+                                       results_filtered_2$Ct)
+
+results_forecast_2 <- forecast_function(results_filtered_2, 
+                                        length(ts_validation_data), 
+                                        matrices_2)
+ci_forecast_2 <- get_credible_interval(results_forecast_2$ft, 
+                                       results_forecast_2$Qt)
+
+
+plot(index, LakeHuron, ylab = "level", 
+     main = "Lake Huron Level",type='l',
+     xlab="time",lty=3,ylim=c(574,584))
+points(index,LakeHuron,pch=20)
+
+lines(index_filt, results_filtered_2$mt, type='l', 
+      col='magenta',lwd=2)
+lines(index_filt, ci_filtered_2[, 1], type='l', 
+      col='magenta', lty=2)
+lines(index_filt, ci_filtered_2[, 2], type='l', 
+      col='magenta', lty=2)
+
+lines(index_forecast, results_forecast_2$ft, type='l', 
+      col='green',lwd=2)
+lines(index_forecast, ci_forecast_2[, 1], type='l', 
+      col='green', lty=2)
+lines(index_forecast, ci_forecast_2[, 2], type='l', 
+      col='green', lty=2)
+
+legend('bottomleft', legend=c("filtered","forecast"),
+       col = c("magenta", "green"), lty=c(1, 1))
+
+plot(index_filt,results_filtered$mt,type='l',col='red',lwd=2,
+     ylim=c(574,584),ylab="level")
+lines(index_filt,results_filtered_2$mt,col='magenta',lwd=2)
+points(index,LakeHuron,pch=20)
+lines(index,LakeHuron,lty=2)
+```
+
