@@ -1,0 +1,508 @@
+---
+title: "Bayesian Time Series Analysis"
+author: "Gerardo R."
+date: "2023-11-05"
+output: pdf_document
+---
+
+```{r setup, include=FALSE, echo=FALSE}
+library(gtrendsR)
+library(dlm)
+library(MCMCpack)
+library(astsa)
+library(mvtnorm)
+```
+
+
+**Abstract**. By using a smoothed Non-Dynamic Linear Model (DNLM) based on two components: an increasing linear trend and a yearly-seasoned period we have fitted a time-series model for the monthly Google searches performed for the term "cough" between the years 2004-2023. Our prediction shows that in 2025 the number of searches will likely surpass the current maximum, which happened in 2020. 
+
+
+**Introduction and data description**. The goal of this project is to predict
+
+
+The goal of this project is to predict how many hits will have the word "cough" in January 2025. The data represents the number of Google searches registered between the years 2004-2023 of the term "cough". As we can see in the data the word "cough" has not done other thing that to be more and more searched while the time passed. This increase seems to have a pattern all years but in 2004-2023, which could (only could!) be related with the impact that cough had in the world's media.
+
+```{r, echo=FALSE, warning=FALSE}
+yt = vroom::vroom('data-cough.csv', skip = 3, col_names = c('Month', "cough"), show_col_types = F)
+yt = ts(yt$cough, start = c(year=2004, month=1), frequency = 12)
+
+
+plot(yt, main='Monthly searches for "cough" in Google', xlab='Year', ylab='Hits', type='l')
+```
+
+
+
+```{r, echo=FALSE}
+# ACF & PACF models
+par(mfrow=c(2,2), cex.lab=1.3, cex.main=1.3)
+acf(yt, main="ACF plot")
+pacf(yt, main="PACF plot")
+
+
+# Filtered and Smoothed models
+window_size = 4 # Arbitrarily selected (for each season: winter, spring...)
+smooth_yt = filter(co2, filter=rep(1/window_size, window_size), sides = 2)
+diff_yt = diff(smooth_yt)
+
+plot(smooth_yt, main='Detrended data')
+plot(diff_yt, main='Smoothered data')
+```
+
+
+**Data exploration**. The ACF plot shows significant correlations between time series in the first 5 lags (so the model we are making will be with those time series). The plot also presents a decay, suggesting the presence of a **linear trend**. On the other hand, based on the decaying PACF plot we conclude there could be **seasonality** in the data.
+
+
+
+## NDLM model
+
+
+## Model proposal
+
+- The data shows non-stationarity behavior (no quasy-periodicity), thus we would prefer to use the Normal Dynamic Linear Model (NDLM) over the autorregression (AR).
+
+- Based on ACF and PACF plots we need to create a linear component and a season component to model our data. We will use the polynomial of order two to capture this double behaviour.
+
+
+We are assuming a NDLM model where:
+
+$y_t = F_t \phi_t + v_t$ being $v_t \text{~} N(0,v_t)$
+
+$\phi_t = G_t \phi_{t-1} + w_t$ being $w_t \text{~} N(0,W_t)$
+
+Additionally here are some details related with model values:
+
+- For model trend component: dV = 10 and dW = 1 
+- For model season component: dV = 10, dW = 1, m0 = 15, C0 = 1
+
+```{r}
+# Model components and combination
+model_trend = dlmModPoly(order = 2, dV = 10, dW=1*rep(1,2), m0 = c(15,0), C0=1*diag(2))
+model_seasonal = dlmModTrig(s = 12, q = 4, dV=1, dW=1)
+full_model = model_trend+model_seasonal
+
+full_model = model_trend
+# Filtering and smoothering the NDLM model
+filtered_model = dlmFilter(yt, full_model)
+smoothed_model = dlmSmooth(filtered_model)
+
+# Plot NDLM predictions
+plot(yt, xlab="time", type='l', main='Smoothed NDLM model predictions with 95% CI', ylab='Hits')
+lines(smoothed_model$s[,1], type='b',pch=4, col='grey20',lwd=0.5)
+legend("topright",legend=c('Truth','Prediction'),lty=1:3,
+       col=c('black','grey40'),horiz = T,pch=c(16,4))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+## AR Model definition and implementation
+
+```{r, echo=FALSE}
+y = as.vector(yt)
+n.all=length(y)
+p.star=8
+Y=matrix(y[(p.star+1):n.all],ncol=1)
+sample.all=matrix(y,ncol=1)
+n=length(Y)
+p=seq(1,p.star,by=1)
+
+
+design.mtx=function(p_cur){
+  Fmtx=matrix(0,ncol=n,nrow=p_cur)
+  for (i in 1:p_cur) {
+    start.y=p.star+1-i
+    end.y=start.y+n-1
+    Fmtx[i,]=sample.all[start.y:end.y,1]
+    }
+  return(Fmtx)
+}
+
+criteria.ar=function(p_cur){
+  Fmtx=design.mtx(p_cur)
+  beta.hat=chol2inv(chol(Fmtx%*%t(Fmtx) + 1-20*diag(nrow(Fmtx))        ))%*%Fmtx%*%Y
+  R=t(Y-t(Fmtx)%*%beta.hat)%*%(Y-t(Fmtx)%*%beta.hat)
+  sp.square=R/(n-p_cur)
+  aic=2*p_cur+n*log(sp.square)
+  bic=log(n)*p_cur+n*log(sp.square)
+  result=c(aic,bic)
+  return(result)
+}
+
+criteria=sapply(p, criteria.ar)
+
+plot(p,criteria[1,],type='p',pch='AIC',col='red',xlab='AR order p',ylab='Criterion',main='AIC (A) and BIC (B) criterion', ylim=c(min(criteria)-10,max(criteria)+10))
+points(p,criteria[2,],pch='BIC',col='blue')
+```
+**Order of the model** The Akaike Informative Criterion (AIC) and Bayesian Information Criterion (BIC) were computed for 8 orders. The values have been regularized with a 1e-5 value to elude problems in the Cholesky decomposition (**this can make my plot different to yours!**). Based on the AIC and BIC criterions, the best model is order 1. 
+
+
+The hierarchical specification of the model can be done by defining: 
+**The model equation**. The AR model can be defined through the following equation:
+
+$\begin{equation}y_t=\phi_1y_{t-1}+\phi_2y_{t-2}+\epsilon_t,\quad \epsilon_t\sim N(0,1) \end{equation}$
+
+**Assumptions**. The error is normally distributed with constant variance (initial 1). Also assumes a normal inverse gamma model: 
+$x_t = φ_0 + φ_1 x_{t-1} + … + φ_p x_{t-p} + σ z_t$
+
+**Prior parameters and parameter estimation**. 1000 simulations (Gibbs sampling) were run considering an AR model of order 1 and using flat priors. The next hyperparameters were chosen:
+
+${m}_0=(0,0)^T,{C}_0=I_2,n_0=2,d_0=2$
+
+
+Based on the sample trace plots the parameter estimation was correct were properly estimated and all have converged. Their Gaussian posterior distributions  are represented as histograms. The posterior means are also reported:
+```{r, echo=FALSE}
+ar.model = ar(y, order.max = 5)
+preds.ar = y-ar.model$resid
+h=10
+future_preds.ar = predict(ar.model, n.ahead = 10)$pred
+
+
+plot(x=1:length(y), y=y, type='l', xlab='Steps (Weeks)', ylab='Search hits',
+     col='black', main='AR(1) model predictions', xlim=c(0, length(y)+h))
+lines(x=1:(length(y)-1), y=preds.ar[-1], type='b',col='gray40',lty=2,pch=4)
+lines(x= seq(length(y)+1, (length(y)+h)), y=future_preds.ar, type='b',col='blue',lty=2,pch=4)
+legend("topright",legend=c('Truth', 'Predictions','Forecasting'),lty=1,
+       col=c('black','gray40','darkblue'),horiz = T)
+```
+
+
+
+
+
+
+## Mixture AR Model definition and implementation
+
+The model can hierarchially be written as:
+
+$\begin{equation} \begin{split} &y_t\sim\sum_{k=1}^K\omega_kN(\mathbf{f}^T_t\boldsymbol{\beta}_k,\nu_k),\quad \mathbf{f}^T_t=(y_{t-1},\cdots,y_{t-p})^T,\quad t=p+1,\cdots,T\\ &\omega_k\sim Dir(a_1,\cdots,a_k),\quad \boldsymbol{\beta}_k\sim N(\mathbf{m}_0,\nu_k\mathbf{C}_0),\quad \nu_k\sim IG(\frac{n_0}{2},\frac{d_0}{2}) \end{split} \end{equation}$
+
+The conditional distributions can be reduced as:
+
+$\begin{equation} \boldsymbol{\omega}|\cdots\sim Dir(a_1+\sum_{t=1}^T\mathbf{1}(L_t=1),\cdots,a_K+\sum_{t=1}^T\mathbf{1}(L_t=K)) \end{equation}$
+
+$\begin{equation} p(L_t=k|\cdots)\propto \omega_kN(y_t|\mathbf{f}^T_t\boldsymbol{\beta}_k,\nu) \end{equation}$
+
+$\begin{equation} \begin{split} &\mathbf{e}_k=\mathbf{\tilde{y}}_k-\mathbf{\tilde{F}}_k^T\mathbf{m}_0,\quad \mathbf{Q}_k=\mathbf{\tilde{F}}_k^T\mathbf{C}_0\mathbf{\tilde{F}}_k+\mathbf{I}_{n_k},\quad \mathbf{A}_k=\mathbf{C}_0\mathbf{\tilde{F}}_k\mathbf{Q}_k^{-1}\\ &\mathbf{m}_k=\mathbf{m}_0+\mathbf{A}_k\mathbf{e}_k,\quad \mathbf{C}_k=\mathbf{C}_0-\mathbf{A}_k\mathbf{Q}_k\mathbf{A}_k^{T}\\ &n_k^*=n_0+n_k,\quad d_k^*=d_0+\mathbf{e}_k^T\mathbf{Q}_k^{-1}\mathbf{e}_k \end{split} \end{equation}$
+
+**Priors and parameter estimation** Considering the assumptions defined in the previous equations, we fitted an AR mixture model with location p=1 and k=3. The model hyperparameters were $a_1=a_2=a_3=1, m_0=(0)^T, c_0=10$ and $n_0=d_0=100$. The Gibbs sampling function was again used also for this model and the parameter estimation. The number of model components is $\tau=3$, and was determined based on DIC (see plot below), which was computed using 10,000 runs:
+
+```{r, echo=FALSE}
+p=2 ## order of AR process
+K=3 ## number of mixing component
+Y=matrix(y[(p+1):length(y)],ncol=1) ## y_{p+1:T}
+Fmtx=matrix(c(y[p:(length(y)-1)],y[1:(length(y)-p)]),nrow=2,byrow=TRUE) ## design matrix F
+n=length(Y) ## T-p
+
+
+## prior hyperparameters
+m0=matrix(rep(0,p),ncol=1)
+C0=10*diag(p)
+C0.inv=0.1*diag(p)
+n0=1
+d0=1
+a=rep(1,K)
+```
+
+
+```{r, echo=FALSE}
+# DETERMINE NUMBER OF COMPONENTS
+## Function to determine the number of mixing components
+## It is a combination of posterior inference for mixture model and calculation of DIC
+
+model_comp_mix=function(tot_num_comp){
+  
+  ## hyperparameters
+  m0=matrix(rep(0,p),ncol=1) ## p is the order of AR process
+  C0=10*diag(p)
+  C0.inv=0.1*diag(p)
+  n0=100
+  d0=100
+  n.all = length(y)
+  K=tot_num_comp ## let the number of mixing component to vary by input
+  a=rep(1,K)
+  
+  Y=matrix(y[(p+1):n.all],ncol=1) ## y_{p+1:T} n.all is the value of T
+  Fmtx=matrix(c(y[p:(n.all-1)],y[1:(n.all-p)]),nrow=2,byrow=TRUE) ## design matrix F
+  n=length(Y)
+  
+  
+  ## The code below is used to obtain posterior samples of model parameters
+  ## Just copy from the last lecture
+  
+  sample_omega=function(L.cur){
+    n.vec=sapply(1:K, function(k){sum(L.cur==k)})
+    rdirichlet(1,a+n.vec)
+  }
+  
+  sample_L_one=function(beta.cur,omega.cur,nu.cur,y.cur,Fmtx.cur){
+    prob_k=function(k){
+      beta.use=beta.cur[((k-1)*p+1):(k*p)]
+      omega.cur[k]*dnorm(y.cur,mean=sum(beta.use*Fmtx.cur),sd=sqrt(nu.cur))
+    }
+    prob.vec=sapply(1:K, prob_k)
+    L.sample=sample(1:K,1,prob=prob.vec/sum(prob.vec))
+    return(L.sample)
+  }
+  
+  sample_L=function(y,x,beta.cur,omega.cur,nu.cur){
+    L.new=sapply(1:n, function(j){sample_L_one(beta.cur,omega.cur,nu.cur,y.cur=y[j,],Fmtx.cur=x[,j])})
+    return(L.new)
+  }
+  
+  sample_nu=function(L.cur,beta.cur){
+    n.star=n0+n+p*K
+    err.y=function(idx){
+      L.use=L.cur[idx]
+      beta.use=beta.cur[((L.use-1)*p+1):(L.use*p)]
+      err=Y[idx,]-sum(Fmtx[,idx]*beta.use)
+      return(err^2)
+    }
+    err.beta=function(k.cur){
+      beta.use=beta.cur[((k.cur-1)*p+1):(k.cur*p)]
+      beta.use.minus.m0=matrix(beta.use,ncol=1)-m0
+      t(beta.use.minus.m0)%*%C0.inv%*%beta.use.minus.m0
+    }
+    
+    d.star=d0+sum(sapply(1:n,err.y))+sum(sapply(1:K,err.beta))
+    1/rgamma(1,shape=n.star/2,rate=d.star/2)
+  }
+  
+  
+  sample_beta=function(k,L.cur,nu.cur){
+    idx.select=(L.cur==k)
+    n.k=sum(idx.select)
+    if(n.k==0){
+      m.k=m0
+      C.k=C0
+    }else{
+      y.tilde.k=Y[idx.select,]
+      Fmtx.tilde.k=Fmtx[,idx.select]
+      e.k=y.tilde.k-t(Fmtx.tilde.k)%*%m0
+      Q.k=t(Fmtx.tilde.k)%*%C0%*%Fmtx.tilde.k+diag(n.k)
+      Q.k.inv=chol2inv(chol(Q.k))
+      A.k=C0%*%Fmtx.tilde.k%*%Q.k.inv
+      m.k=m0+A.k%*%e.k
+      C.k=C0-A.k%*%Q.k%*%t(A.k)
+    }
+    
+    rmvnorm(1,m.k,nu.cur*C.k)
+  }
+  
+  nsim=3000
+  
+  ## store parameters
+  
+  beta.mtx=matrix(0,nrow=p*K,ncol=nsim)
+  L.mtx=matrix(0,nrow=n,ncol=nsim)
+  omega.mtx=matrix(0,nrow=K,ncol=nsim)
+  nu.vec=rep(0,nsim)
+  
+  ## initial value
+  
+  beta.cur=rep(0,p*K)
+  L.cur=rep(1,n)
+  omega.cur=rep(1/K,K)
+  nu.cur=100
+  
+  ## Gibbs Sampler
+  
+  for (i in 1:nsim) {
+    set.seed(i)
+    
+    ## sample omega
+    omega.cur=sample_omega(L.cur)
+    omega.mtx[,i]=omega.cur
+    
+    ## sample L
+    L.cur=sample_L(Y,Fmtx,beta.cur,omega.cur,nu.cur)
+    L.mtx[,i]=L.cur
+    
+    ## sample nu
+    nu.cur=sample_nu(L.cur,beta.cur)
+    nu.vec[i]=nu.cur
+    
+    ## sample beta
+    beta.cur=as.vector(sapply(1:K, function(k){sample_beta(k,L.cur,nu.cur)}))
+    beta.mtx[,i]=beta.cur
+    
+    if(i%%1000==0){
+      print(i)
+    }
+    
+  }
+  
+  ## Now compute DIC for mixture model
+  ## Somilar as the calculation of DIC in Module 2
+  
+  cal_log_likelihood_mix_one=function(idx,beta,nu,omega){
+    norm.lik=rep(0,K)
+    for (k.cur in 1:K) {
+      mean.norm=sum(Fmtx[,idx]*beta[((k.cur-1)*p+1):(k.cur*p)])
+      norm.lik[k.cur]=dnorm(Y[idx,1],mean.norm,sqrt(nu),log=FALSE)
+    }
+    log.lik=log(sum(norm.lik*omega))
+    return(log.lik)
+  }
+  
+  cal_log_likelihood_mix=function(beta,nu,omega){
+    sum(sapply(1:n, function(idx){cal_log_likelihood_mix_one(idx=idx,beta=beta,nu=nu,omega=omega)}))
+  }
+  
+  sample.select.idx=seq(1,nsim,by=1)
+  
+  beta.mix=rowMeans(beta.mtx[,sample.select.idx])
+  nu.mix=mean(nu.vec[sample.select.idx])
+  omega.mix=rowMeans(omega.mtx[,sample.select.idx])
+  
+  log.lik.bayes.mix=cal_log_likelihood_mix(beta.mix,nu.mix,omega.mix)
+  
+  post.log.lik.mix=sapply(sample.select.idx, function(k){cal_log_likelihood_mix(beta.mtx[,k],nu.vec[k],omega.mtx[,k])})
+  E.post.log.lik.mix=mean(post.log.lik.mix)
+  
+  p_DIC.mix=2*(log.lik.bayes.mix-E.post.log.lik.mix)
+  
+  DIC.mix=-2*log.lik.bayes.mix+2*p_DIC.mix
+  
+  return(DIC.mix)
+}
+
+## Run this code will give you DIC corresponding to mixture model with 2:5 mixing components
+mix.model.all=sapply(2:5,model_comp_mix)
+
+# Plot
+plot(2:5, mix.model.all, type='p',pch='DIC',col='red',xlab='Mixture AR components k',ylab='DIC',main='Number of componentes based on DIC criterion', ylim=c(min(mix.model.all)-10,max(mix.model.all)+10))
+```
+
+
+
+After model specification k=3 and all details previously mentioned, Gibbs sampling with 10,000 simulations was run to define the parameter values of the AR-mixed model and the future predictions h=3 steps/Months ahead. The next plot summarizes all results with a CI 95%:
+
+
+
+```{r, echo=FALSE}
+
+mixAR.model = mixAR::fit_mixAR(x = y, c(1,1,1,1,1))$model
+
+mixAR::predict_coef(mixAR.model$model, maxh = 1)
+
+
+y.new = y
+ar_coefs = unlist(mixAR.model@arcoef@a)
+ar_steps = sapply(mixAR.model@order, )
+
+mixAR.model$model@prob * (mixAR.model$model@shift + ar_coefs*sapply(\) )
+```
+
+
+```{r, echo=FALSE}
+sample.select.idx=seq(10001,20000,by=1)
+
+post.pred.y.mix=function(idx){
+  k.vec.use=L.mtx[,idx]
+  beta.use=beta.mtx[,idx]
+  nu.use=nu.mtx[,idx]
+
+  get.mean=function(s){
+    k.use=k.vec.use[s]
+    sum(Fmtx[,s]*beta.use[((k.use-1)*p+1):(k.use*p)])
+    }
+  get.sd=function(s){
+    k.use=k.vec.use[s]
+    sqrt(nu.use[k.use])
+    }
+  mu.y=sapply(1:n, get.mean)
+  sd.y=sapply(1:n, get.sd)
+  sapply(1:length(mu.y), function(k){rnorm(1,mu.y[k],sd.y[k])})
+} 
+
+y.post.pred.sample=sapply(sample.select.idx, post.pred.y.mix)
+
+summary.vec95=function(vec){
+  c(unname(quantile(vec,0.025)),mean(vec),unname(quantile(vec,0.975)))
+}
+
+summary.y=apply(y.post.pred.sample,MARGIN=1,summary.vec95)
+```
+
+
+
+
+
+
+
+
+## Prediction ahead
+
+We are making a prediction 3 steps ahead (thus, 3 Months in advance). Will the number of searches increase or decrease?
+
+```{r, echo=FALSE}
+post.pred.y.mix.step.ahead = function(h.step, s){
+  omega.vec.use = omega.mtx[,s]
+  beta.use = beta.mtx[,s]
+  nu.use = nu.cur[s]
+  last = length(y)
+  
+  
+  y.cur = c(y[last], y[last-1])
+  y.pred=rep(0, h.step)
+  for (i in 1:h.step){
+    k.use=sample(1:K, 1, prob = omega.vec.use)
+    beta.cat = beta.use[((k.use-1)*p+1):(k.use*p)]
+    mu.y = sum(y.cur*beta.cat)
+    y.new = rnorm(1,mu.y,sqrt(nu.use))
+    y.pred[i] = y.new
+    y.cur = c(y.new, y.cur)
+    y.cur = y.cur[-length(y.cur)]
+  }
+  return(y.pred)
+}
+s=3
+y.h.ahead = post.pred.y.mix.step.ahead(3, s=3)
+```
+
+
+
+
+
+
+## Results (inference and forecasting) & Conclusion
+
+```{r, echo=FALSE}
+library(dplyr)
+yt$s = 1:nrow(yt)
+yt %>% d
+
+
+plot(y = Y, x=yt$Month[1:length(Y)],type='b',xlab='Time',ylab='',pch=16, main='Posteror inference in 95% CI \n and h=3 steps ahead', ylim = c(min(summary.y), max(summary.y))      )
+
+
+plot(Y,type='b',xlab='Steps',ylab='',pch=16, main='Posterior inference in 95% CI and h=3 steps forecasting',
+     xlim = c(0,length(Y)+length(y.h.ahead)))
+lines(summary.y[2,],type='b',col='grey',lty=2,pch=4)
+lines(summary.y[1,],type='l',col='purple',lty=3)
+lines(summary.y[3,],type='l',col='purple',lty=3)
+lines(c(rep(0, length(Y)), y.h.ahead),type='p',col='blue',lty=3)
+legend("topright",legend=c('Truth','Mean','95% C.I.', 'Prediction'),lty=1:3,
+       col=c('black','grey','purple', 'blue'),horiz = T,pch=c(16,4,NA))
+```
+
+**Conclusion** A mixed AR model of the characteristics mentioend () can perform confident predictions close to the real values and additionally can be used to make "future" predictions based on previous data. cough searches have been predicted to decrease as part of the trend in the 3 next Months after the end-date of the data collected (M). Our mixture AR model predicts a more extreme decrease ($y_{s+h_3}=$) 
+
+\pagebreak
+
+
+## Some extra notes for replication 
+**Software details**. The whole project was run using the R package: dlm. For replication purposes, you can just introduce the parameters specified in the model section. The data obtaiend was downloaded through the R package: gtrends. All code written was done using R programming. 
+
+\pagebreak
+## Thank you for taking your time to review!
+I tried to be brief and explicit. Hope it was easy to follow! :)
+
