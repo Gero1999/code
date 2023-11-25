@@ -41,7 +41,8 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [Protein Variant Analysis](R/Protein-Variant-Analysis). Analysis and study figures that can be performed over a set of translated DNA coding sequences. 
 
 #### Bayesian and MCMC methods
-* [Predict doctor visits with Poisson]. Posteriors for Poisson regressions can be used to predict the number of visits of a patient considering their age and health state. The model was created with rJAGS.
+* [Identify seasonality in anxyolitic sales using a hierarchical model](R/Bayesian-Hierarchical-DrugSales).This project illustrates the differences of sales in USA for this pharmaceuticals comparing the entry of winter and June.
+* [Predict doctor visits with Poisson](R/Bayesian-Poisson-DrVisits). Posteriors for Poisson regressions can be used to predict the number of visits of a patient considering their age and health state. The model was created with rJAGS.
 
 ##### Shiny Apps
 * [Texas Cheater](shinyR/texas-cheater) A Texas Poker simulator capable to predict your probabilities to win a game based on your game circumstances.
