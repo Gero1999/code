@@ -30,25 +30,6 @@ function(input, output, session) {
   # Initial instructions within user login 
   observeEvent(input$start==0, {
     
-
-    showModal(modalDialog(
-      'W
-      elcome to PokeGuess!',
-      icon(name=NULL, class='nes-pokeball'),
-      tags$a(href='https://github.com/Gero1999', 'Author'),
-      tags$a(href='https://github.com/Gero1999', 'Data'),
-      tags$a(href='https://github.com/Gero1999', 'Images'),
-      tags$hr(style = "border-top: 1px solid #000000;"),
-      h4('PokeGuess is an app imitating the classic game "Who is that Pokemon?" You just need to guess the silhouette of the Pokemon (psst, ask for hints if you need them). To start simply select the Pokemon generations you want to try. Good luck and catch them all!  '),
-      tags$hr(style = "border-top: 1px solid #000000;"),
-      tags$div(id = session$ns("constraintPlaceholder")),
-      title = "Instructions and general information",
-      footer = tagList(
-        modalButton("Start")
-      )
-    ))
-    
-    
     showModal(modalDialog(
       
       tags$b('Welcome to PokeGuess!'),
@@ -58,17 +39,18 @@ function(input, output, session) {
               Just select those Pokemon generations you want to play and try to guess them all!'),
       tags$b('Press Start when you are ready'),
       tags$ul(class='framed buttons compact', 
-              tags$li(class='button', 'Author', onclick="location.href='https://github.com/Gero1999'"),
-              tags$li(class='button', 'Data',  onclick="location.href='https://github.com/Gero1999'"),
-              tags$li(class='button', 'Images', onclick="location.href='https://github.com/Gero1999'"),
-              tags$li(class='button', 'Sounds', onclick="location.href='https://github.com/Gero1999'"),
+              tags$li(class='button', tags$a('Author', href='https://github.com/Gero1999', 
+                                             target='_blank', style = 'color: black')),
+              tags$li(class='button', tags$a('Data', href='https://github.com/Gero1999', 
+                                             target='_blank', style = 'color: black')),
+              tags$li(class='button', tags$a('Images', href='https://github.com/Gero1999', 
+                                             target='_blank', style = 'color: black')),
+              tags$li(class='button', tags$a('Sounds/BG', href='https://github.com/Gero1999', 
+                                             target='_blank', style = 'color: black'))
+    
       ),
               footer=tagList(modalButton('Start'))
- 
     ))
-    
-    
-    
   })
   
   
@@ -84,7 +66,7 @@ function(input, output, session) {
     values$pokemon = values$data[sample(nrow(values$data),1),]
     
     # Load image
-    img = png::readPNG(paste0('images/',tolower(values$pokemon$name),'.png'))
+    img = png::readPNG(paste0('images_pokemon/',tolower(values$pokemon$name),'.png'))
     
     # Make a black and white version
     mtx.bw = (rowSums(img, dims=2) > 0)+0
@@ -98,13 +80,20 @@ function(input, output, session) {
     
     # Don't display the answer yet
     values$solution = "Who's that Pokemon?"
+    
+    # Play an audio
+    tags$audio(src=paste0('sounds/',
+                          tolower(values$pokemon$name),
+                          '.wav'), 
+               type='audio/wav', autoplay=TRUE, 
+               controls = NA, style="display:none;")
     }
   )
   
   observeEvent(input$check_button,{
     # Show answer (name and image)
     values$solution = paste0(values$pokemon$pokedex_number, '. ', values$pokemon$name)
-    values$img_path = paste0('images/',tolower(values$pokemon$name),'.png')
+    values$img_path = paste0('images_pokemon/',tolower(values$pokemon$name),'.png')
     
     # Return if user's guess was right or not
     if (values$solution == input$pokemon_guess){

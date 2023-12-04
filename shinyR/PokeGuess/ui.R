@@ -56,15 +56,8 @@ ui = dashboardPage(skin = 'red',
                              tags$li(class='button', 'Ability2'),
                              tags$li(class='button', 'Ability3')
                              
-                             ),
-                     
-                     HTML('&nbsp &nbsp'),
-                     
-                     tags$div(
-                       class = "progress-bar-container",
-                       tags$label("Good health:", "progressBarG"),
-                       tags$div(class='progress-bar p2', id='progressBarG', color='blue')
-                     )
+                             )
+            
   
                    )
                    
