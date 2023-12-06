@@ -32,12 +32,12 @@ function(input, output, session) {
     
     showModal(modalDialog(
       
-      tags$b('Welcome to PokeGuess!'),
-      tags$hr(style = "border-top: 1px solid #000000;"),
-      tags$h4('PokeGuess is an app imitating the classic game "Who is that Pokemon?" 
+      tags$h4('Welcome to PokeGuess!', style='text-align: center;'),
+      tags$hr(style = "border-top: 0.5px solid #000000;"),
+      tags$h6('PokeGuess is an app imitating the classic game "Who is that Pokemon?" 
               You just need to guess the silhouette of the Pokemon (psttt, I also included other hints).
-              Just select those Pokemon generations you want to play and try to guess them all!'),
-      tags$b('Press Start when you are ready'),
+              Just select those Pokemon generations you want to play and try to guess them all!',
+              style='text-align: justify;'),
       tags$ul(class='framed buttons compact', 
               tags$li(class='button', tags$a('Author', href='https://github.com/Gero1999', 
                                              target='_blank', style = 'color: black')),
@@ -69,7 +69,7 @@ function(input, output, session) {
     img = png::readPNG(paste0('images_pokemon/',tolower(values$pokemon$name),'.png'))
     
     # Make a black and white version
-    mtx.bw = (rowSums(img, dims=2) > 0)+0
+    mtx.bw = (rowSums(img, dims=2) == 0)+0
     img.bw = array(mtx.bw, dim=dim(img))
     img.bw[,,4] = img[,,4]  # Transparency layer
     
@@ -80,13 +80,6 @@ function(input, output, session) {
     
     # Don't display the answer yet
     values$solution = "Who's that Pokemon?"
-    
-    # Play an audio
-    tags$audio(src=paste0('sounds/',
-                          tolower(values$pokemon$name),
-                          '.wav'), 
-               type='audio/wav', autoplay=TRUE, 
-               controls = NA, style="display:none;")
     }
   )
   
@@ -96,12 +89,22 @@ function(input, output, session) {
     values$img_path = paste0('images_pokemon/',tolower(values$pokemon$name),'.png')
     
     # Return if user's guess was right or not
-    if (values$solution == input$pokemon_guess){
+    if ((values$solution == input$pokemon_guess) && (values$pokemon$name %in% values$data$name)){
       values$points <- values$points+1
-
+      
+      # Take off the Pokemon so it does not repeat
+      values$data = values$data[!values$data$name==values$pokemon$name,]
     }
     
-    
+    # Play Pokemon cry audio
+    if (input$enable_sound){
+    insertUI(selector='#check_button', 
+             ui=tags$audio(src=paste0('sounds/', tolower(values$pokemon$name), '.wav'),
+                           type='audio/wav', 
+                           autoplay=TRUE, 
+                           style='display:none;')
+             )
+      }
    }
   )
   
@@ -116,7 +119,16 @@ function(input, output, session) {
   output$points <- renderText(values$points)
 
   
-
+  # HINTS
+  
+  observeEvent(input$check_button,{
+    
+  output$hint_box1 = renderText( values$pokemon$type1 )
+  output$hint_box2 = renderText( values$pokemon$type2 )
+  output$hint_box3 = renderText( values$pokemon$classfication )
+  output$hint_box4 = renderText( values$pokemon$abilities )
+  }) 
+  
   # Server-rendered numeric outputs
 
   

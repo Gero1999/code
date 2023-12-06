@@ -8,57 +8,80 @@ library(shinyWidgets)
 
 data = read.csv('data/pokemon.csv')
 
-ui = dashboardPage(skin = 'red', 
-                   
-                   dashboardHeader(title = "PokeGuess", disable = F)
-                   ,
-                   dashboardSidebar( 
-                  
 
-                       # INPUT: CHOOSE POKEMON GUESS
-                       pickerInput(width = 200,
-                                   inputId = "pokemon_guess", label = "Your guess",
-                                   choices = paste0(data$pokedex_number, '. ', data$name), 
-                                   multiple=F, options = list(`live-search`=T)
-                       ),
-          
-                             
-                       
-                       
-                       # INPUT: SELECT GENERATIONS
-                       checkboxGroupInput('generations', label='Pokemon Generations included',
-                                          choiceValues = 1:7, selected = 1:7, choiceNames = paste0('G', 1:7), inline = T),
-                       
-                       # RETRIEVE POINTS (CORRECT GUESSES)
-             
-                       textOutput('points'), 
-                       
-                       # INPUT: NEXT & CHECK BUTTONS
-                       HTML('&nbsp &nbsp'),
-                       actionButton('next_button', 'Next', class='btn btn-primary', ),
-                       HTML('&nbsp &nbsp'),
-                       actionButton('check_button', 'Check', class='btn btn-primary')
-                       ),
-                       
-                   dashboardBody(
-                     tags$head(tags$link(rel='stylesheet', type='text/css', 
-                                         href='./styles/css-pokemon-gameboy.css')),
-                     
-                     tags$b(textOutput('pokemon_solution')),
-                     
-                     box(title='', collapsible=T,
-                         column(12, align="center", imageOutput('img')),
-                         width = 50,height = 400, background = 'black'),
-                
-                     tags$ul(class='framed buttons compact', 
-                             tags$li(class='button', 'Pokemon description'),
-                             tags$li(class='button', 'Ability1'),
-                             tags$li(class='button', 'Ability2'),
-                             tags$li(class='button', 'Ability3')
-                             
-                             )
-            
+ui = fluidPage(
+  # Set aesthetic elements (background and css)
+  tags$head(tags$link(rel='stylesheet', type='text/css', 
+                      href='./styles/css-pokemon-gameboy.css')),
+  setBackgroundImage(src='pokemon_bg-DevianArt-amitlu89.png', shinydashboard = F),
+  useShinydashboard(),
+
   
-                   )
-                   
+  
+
+  fluidRow(width=6,
+    column(width=1),
+    column(width=6, align='center',
+           tags$br(), tags$br(),  tags$br(),
+           div( style='height: 100px; overflow-y:auto;',
+                tags$h2(textOutput('pokemon_solution'))),
+
+           imageOutput('img'),
+           box(collapsible=F, closable=F, background='black', align='center', width=50, solidHeader = F,
+               pickerInput(width = 225,
+                           inputId = "pokemon_guess", label = "Your guess",
+                           choices = paste0(data$pokedex_number, '. ', data$name), 
+                           multiple=F, options = list(`live-search`=T)
+               ),
+               actionButton('next_button', 'Next', class='btn btn-primary'),
+               actionButton('check_button', 'Check', class='btn btn-primary'),
+               tags$br(), tags$br(),
+               checkboxGroupInput('generations', label='Pokemon Generations',
+                                  choiceValues = 1:7, selected = 1:7, choiceNames = paste0('G', 1:7), inline = T),
+           )
+           ),
+           
+ 
+    column(width=3, align='center',
+           div(
+             style = "
+                   margin-left:36%;
+                    display: inline-block;
+                    position: absolute;
+                ",
+             img(
+               src = "poke.svg",
+               height = 300,
+               width = 300,
+               style = "  position: relative;
+                          top: -70px; 
+                          right: 210px;"
+             ),
+             span(textOutput("points"),
+                  style = "
+              color: white;
+                 position: relative;
+                     top: -255px;
+                    right: 40px;
+                  text-align:left;
+                  font-size: 35px;"
+             ),
+             span(materialSwitch(inputId = "enable_sound", right=F, value = T, status='primary',
+                                 label = "Sound", inline = T, width = '20%'),
+                  style = "color: white;
+                                          position: relative;
+                                          top: -310px;
+                                          right: 60px;
+                                          font-size: 20px;"
+             )
+           ),
+
+           
+           )
+    
+
+  )
+  
+
+
 )
