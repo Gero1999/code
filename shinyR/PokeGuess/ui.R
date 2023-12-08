@@ -4,7 +4,7 @@ library(shinythemes)
 library(shinydashboard)
 library(RCurl)
 library(shinyWidgets)
-
+library(shinyglide)
 
 data = read.csv('data/pokemon.csv')
 
@@ -76,6 +76,12 @@ ui = fluidPage(
              )
            ),
 
+           glide(
+            screen(plotOutput('plot1')),
+            screen(plotOutput('plot2'))
+           )
+    
+           
            
            )
     

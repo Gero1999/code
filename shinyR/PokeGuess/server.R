@@ -6,7 +6,7 @@
 #
 #    http://shiny.rstudio.com/
 #
-
+library(shinyglide)
 library(shiny)
 library(dplyr)
 library(tidyr)
@@ -14,9 +14,22 @@ library(png)
 
 data = read.csv('data/pokemon.csv')
 
+# Function for generating Pokemon Statistic plots (additional hints for the game)
+stats_plot = function(data, stat1, stat2){
+  par(cex=0.9)
+  plot(x=data[,stat1], y=data[,stat2], col=data$colors, pch=16,
+       xlab=paste0(stat1), ylab=paste0(stat2))
+  
+  text(pokemon[,stat1], pokemon[,stat2], pos=4, cex=0.75,
+       labels=paste0('(',pokemon[,stat1], ',', pokemon[,stat2],')'))
+  abline(h=median(data[,stat1]),v=median(data[,stat2]), lwd=c(0.5,0.5), lty=c(2,2))
+  par(cex=0.7)
+  legend(x='topright', inset=0, legend=c('Target Pokemon', paste0('Type ', pokemon$type1, ' ', pokemon$type2), 'Other'), 
+         pch=1, col= c('red', 'purple4', 'grey80'), horiz=F, yjust = 0.5, x.intersp = 1.2)
+}
+
 
 function(input, output, session) {
-  
   
   # Set initial values for all the changing variables
   values = reactiveValues(
@@ -32,23 +45,42 @@ function(input, output, session) {
     
     showModal(modalDialog(
       
-      tags$h4('Welcome to PokeGuess!', style='text-align: center;'),
+      img(src='pokemon-pikachu.gif', width='8%',
+      style = "  position: relative;
+                          top: 25px; 
+                          right: -10px;"),
+      
+      img(src='pokemon-pikachu.gif', width='8%',
+          style = "  position: relative;
+                          top: 25px; 
+                          right: -430px;"),
+      
+      tags$h4('Welcome to PokeGuess!', 
+              style='text-align: center;
+                     position: relative;
+                  '),
+      
+
+      
       tags$hr(style = "border-top: 0.5px solid #000000;"),
+
       tags$h6('PokeGuess is an app imitating the classic game "Who is that Pokemon?" 
-              You just need to guess the silhouette of the Pokemon (psttt, I also included other hints).
-              Just select those Pokemon generations you want to play and try to guess them all!',
+              You just need to guess the silhouette of the Pokemon.
+              When you feel ready press start, select the Pokemon generations and try to guess them all!',
               style='text-align: justify;'),
       tags$ul(class='framed buttons compact', 
-              tags$li(class='button', tags$a('Author', href='https://github.com/Gero1999', 
+              tags$li(class='button', tags$a('GitHub', href='https://github.com/Gero1999', 
                                              target='_blank', style = 'color: black')),
               tags$li(class='button', tags$a('Data', href='https://github.com/Gero1999', 
                                              target='_blank', style = 'color: black')),
               tags$li(class='button', tags$a('Images', href='https://github.com/Gero1999', 
                                              target='_blank', style = 'color: black')),
-              tags$li(class='button', tags$a('Sounds/BG', href='https://github.com/Gero1999', 
+              tags$li(class='button', tags$a('Sounds/CSS', href='https://github.com/Gero1999', 
                                              target='_blank', style = 'color: black'))
     
       ),
+      
+      
               footer=tagList(modalButton('Start'))
     ))
   })
@@ -56,8 +88,8 @@ function(input, output, session) {
   
   observeEvent(input$start | input$next_button, {
     # Choose only data from the specified generations
-    values$data = values$data %>% 
-      dplyr::filter(generation %in% input$generations)
+    values$data = data %>% 
+      dplyr::filter(generation %in% input$generations) 
     
     updatePickerInput(session, 'pokemon_guess', 
                       choices = paste0(values$data$pokedex_number, '. ', values$data$name))
@@ -80,6 +112,19 @@ function(input, output, session) {
     
     # Don't display the answer yet
     values$solution = "Who's that Pokemon?"
+    
+    # Create Pokemon Stats plots
+    plot_data = values$data %>%
+      # Make adjustments for the data plots
+      mutate(colors=case_when(name==pokemon$name ~ 'red',
+                              type1==pokemon$type1 & type2==pokemon$type2 ~ 'purple4',
+                              TRUE ~ 'grey80')) %>% 
+      arrange(colors)
+
+    output$plot1 <- renderPlot(stats_plot(plot_data, 'attack', 'defense'))
+    output$plot2 <- renderPlot(stats_plot(plot_data, 'sp_attack', 'sp_defense'))
+    output$plot3 <- renderPlot(stats_plot(plot_data, 'speed', 'hp'))
+    output$plot4 <- renderPlot(stats_plot(plot_data, 'height', 'weight'))
     }
   )
   
