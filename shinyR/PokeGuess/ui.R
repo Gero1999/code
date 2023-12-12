@@ -13,7 +13,7 @@ ui = fluidPage(
   # Set aesthetic elements (background and css)
   tags$head(tags$link(rel='stylesheet', type='text/css', 
                       href='./styles/css-pokemon-gameboy.css')),
-  setBackgroundImage(src='pokemon_bg-DevianArt-amitlu89.png', shinydashboard = F),
+  setBackgroundImage(src='images/design/background.png', shinydashboard = F),
   useShinydashboard(),
 
   
@@ -24,7 +24,8 @@ ui = fluidPage(
     column(width=6, align='center',
            tags$br(), tags$br(),  tags$br(),
            div( style='height: 100px; overflow-y:auto;',
-                tags$h2(textOutput('pokemon_solution'))),
+                tags$h2(textOutput('pokemon_solution'),
+                        style = "color: black;")),
 
            imageOutput('img'),
            box(collapsible=F, closable=F, background='black', align='center', width=50, solidHeader = F,
@@ -45,24 +46,24 @@ ui = fluidPage(
     column(width=3, align='center',
            div(
              style = "
-                   margin-left:36%;
+                   margin-left:10%;
                     display: inline-block;
                     position: absolute;
                 ",
              img(
-               src = "poke.svg",
+               src = "images/design/pokeball.svg",
                height = 300,
                width = 300,
                style = "  position: relative;
                           top: -70px; 
-                          right: 210px;"
+                          right: 270px;"
              ),
              span(textOutput("points"),
                   style = "
               color: white;
                  position: relative;
                      top: -255px;
-                    right: 40px;
+                    right: 100px;
                   text-align:left;
                   font-size: 35px;"
              ),
@@ -71,15 +72,17 @@ ui = fluidPage(
                   style = "color: white;
                                           position: relative;
                                           top: -310px;
-                                          right: 60px;
+                                          right: 85px;
                                           font-size: 20px;"
-             )
+             ),
+      
+             actionButton(inputId='pokedex_hint',label='Hint', 
+             style="width: 80px; height: 120px; background: url('images/design/pokedex.jpg');
+             position: relative; top: -310px; right: 30px;
+             background-size: 100% 100%; background-position: center;")
            ),
 
-           glide(
-            screen(plotOutput('plot1')),
-            screen(plotOutput('plot2'))
-           )
+    
     
            
            
