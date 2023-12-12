@@ -1,32 +1,18 @@
----
-editor_options: 
-  markdown: 
-    wrap: 72
----
-
 <!-- PROJECT LOGO -->
-
 <br />
+<div align="center">
+  <a href="https://github.com/Gero1999/code/tree/main/shinyR/PokeGuess">
+    <img src="project_icon.jpg" alt="Logo" width="100" height="90">
+  </a>
 
-::: {align="center"}
-<a href="https://github.com/Gero1999/code/new/main/shinyR/pairwise_alignment">
-<img src="project_icon.jpg" alt="Logo" width="140" height="80"/> </a>
+  <h3 align="center">PokeGuess</h3>
+  <a href="https://gero1999.shinyapps.io/PokeGuess/"><strong>Check the app »</strong></a>
+  <p align="center">
+    Try to guess them all!
+  </p>
+</div>
 
-<h3 align="center">
 
-PokeGuess
-
-</h3>
-
-<a href="https://gero1999.shinyapps.io/PokeGuess/"><strong>Check the app
-»</strong></a>
-
-<p align="center">
-
-Try to guess them all!\
-
-</p>
-:::
 
 <!-- ABOUT THE PROJECT -->
 
@@ -60,7 +46,13 @@ order to play you just need to check the app or press here and start
 playing. There are audio files so remember to turn off the volume in
 case you prefer to mute the Pokemons!
 
-![Testing example]('testing_example.gif')
+
+<br> 
+<p align='center'>
+<img src="testing_example.gif" alt="drawing" width="700" align='center'/>
+</p>
+<br>
+
 
 ## Recognition
 
@@ -78,16 +70,11 @@ people who made the data available:
 5)  Additional decorative images such as the Pokedex were found here or
     the initial Pikagu.gif here.
 
-<p align="right">
+### Built with
+* [shiny]()
+* [png]()
+* [RCurl]()
+* [shinyWidgets]()
+* [shinyglide]()
+* [tidyr]()
 
-(<a href="#top">back to top</a>)
-
-</p>
-
-<!-- GETTING STARTED -->
-
-## Getting Started
-
-This is an example of how you may give instructions on setting up your
-project locally. To get a local copy up and running follow these simple
-example steps.
