@@ -8,8 +8,9 @@ editor_options:
 
 <br />
 
-::: {align="center"} <a href=" ">
-<img src="project_icon" alt="Logo" width="140" height="80"/> </a>
+::: {align="center"}
+<a href="https://github.com/Gero1999/code/new/main/shinyR/pairwise_alignment">
+<img src="project_icon.jpg" alt="Logo" width="140" height="80"/> </a>
 
 <h3 align="center">
 
@@ -25,6 +26,7 @@ PokeGuess
 Try to guess them all!\
 
 </p>
+:::
 
 <!-- ABOUT THE PROJECT -->
 
