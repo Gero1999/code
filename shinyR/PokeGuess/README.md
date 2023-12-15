@@ -67,8 +67,8 @@ people who made the data available:
     webpage](https://www.sounds-resource.com/3ds/pokemonultrasunultramoon/)
 4)  CSS Gameboy-Pokemon style comes from [this GitHub
     repository](https://github.com/luttje/css-pokemon-gameboy)
-5)  Additional decorative images such as the Pokedex were found here or
-    the initial Pikagu.gif here.
+5)  Additional decorative images such as the Pokedex were found [here](https://www.deviantart.com/drboxhead/art/Pokedex-Phone-Wallpaper-772235721) or
+    the initial Pikagu.gif [here](https://tenor.com/view/pokemon-pikachu-pokemon-ball-wave-happy-gif-20575381).
 
 ### Built with
 * [shiny]()
