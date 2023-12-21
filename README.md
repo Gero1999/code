@@ -40,11 +40,15 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 ##### Proteomics
 * [Protein Variant Analysis](R/Protein-Variant-Analysis). Analysis and study figures that can be performed over a set of translated DNA coding sequences. 
 
-#### Bayesian and MCMC methods
+##### Bayesian and MCMC methods
 * [Identify seasonality in anxyolitic sales using a hierarchical model](R/Bayesian-Hierarchical-DrugSales).This project illustrates the differences of sales in USA for this pharmaceuticals comparing the entry of winter and June.
 * [Predict doctor visits with Poisson](R/Bayesian-Poisson-DrVisits). Posteriors for Poisson regressions can be used to predict the number of visits of a patient considering their age and health state. The model was created with rJAGS.
 
+##### Time series 
+* [Fit AR, NDLM and mixAR for google searches]. Analyze the pattern for the Google searching hits of the term "cough" and identify the best model solution to predict the next year's values. 
+
 ##### Shiny Apps
+* [PokeGuess](shinyR/PokeGuess) A Pokemon game where you have to guess the Pokemon based on the silhouette and the data
 * [Texas Cheater](shinyR/texas-cheater) A Texas Poker simulator capable to predict your probabilities to win a game based on your game circumstances.
 * [Pairwise Alignment](shinyR/pairwise_alignment). Assess the alignemnt of two sequences thorugh dinamyc programming (Watermann algorithm).
 
