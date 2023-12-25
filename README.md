@@ -45,7 +45,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 * [Predict doctor visits with Poisson](R/Bayesian-Poisson-DrVisits). Posteriors for Poisson regressions can be used to predict the number of visits of a patient considering their age and health state. The model was created with rJAGS.
 
 ##### Time series 
-* [Fit AR, NDLM and mixAR for google searches]. Analyze the pattern for the Google searching hits of the term "cough" and identify the best model solution to predict the next year's values. 
+* [Fit AR, NDLM and mixAR for Google searches](). Analyze the pattern for the Google searching hits of the term "cough" and identify the best model solution to predict the next year's values. 
 
 ##### Shiny Apps
 * [PokeGuess](shinyR/PokeGuess) A Pokemon game where you have to guess the Pokemon based on the silhouette and the data
