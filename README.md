@@ -15,7 +15,7 @@ Welcome to my code repository! Here, you'll find a collection of projects and le
 ##### Streamlit Apps
 * [Clone trigger](streamlit/clone_trigger). Given a DNA reference sequence and a DNA intended to be clone it suggests top 20 list of forward and reverse primers that can be used as well as the restriction enzymes. 
 * [Prot-Profiler](streamlit/prot-profiler-app). Based on a set of protein sequences it produces a HMM-profile
-* [Resume](streamlit/resume). My professional portfolio detailing my experience, availability and different contributions
+* [Portfolio Website](streamlit/resume). My professional portfolio detailing my experience, availability and different contributions
 
 ##### Machine Learning
 * [BERT Text classification for suicide-risk detection](Python/TextClass_BERT). Using BERT's architecture, TensorFlow and a dataset from Kaggle, the model can identify suicide-related messages
